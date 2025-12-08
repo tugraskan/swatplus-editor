@@ -268,7 +268,8 @@ class ImportTextFiles(ExecutableApi):
 		
 		# Import various connection files
 		# Note: These files currently don't have read() implementations
-		# They are listed here for completeness and will be skipped gracefully
+		# They are listed here for completeness and will be imported when read() is implemented
+		# TODO: Implement read() methods in fileio/connect.py for these file types
 		connect_files = {
 			'hru.con': connect.Hru_con,
 			'hru-lte.con': connect.Hru_lte_con,
@@ -282,14 +283,14 @@ class ImportTextFiles(ExecutableApi):
 			'outlet.con': connect.Outlet_con
 		}
 		
-		for filename, file_class in connect_files.items():
-			if self.file_exists(filename):
-				try:
-					# Connection files need read() implementation
-					# Will be skipped until implemented
-					pass
-				except NotImplementedError:
-					pass
+		# When read() methods are implemented, use this pattern:
+		# for filename, file_class in connect_files.items():
+		#     if self.file_exists(filename):
+		#         try:
+		#             # Call the appropriate read method
+		#             pass
+		#         except NotImplementedError:
+		#             pass
 		
 		return start_prog + allocated_prog
 	
@@ -469,7 +470,8 @@ class ImportTextFiles(ExecutableApi):
 		
 		# Import various initialization files
 		# Note: These files currently don't have read() implementations
-		# They are listed here for completeness and will be skipped gracefully
+		# They are listed here for completeness and will be imported when read() is implemented
+		# TODO: Implement read() methods in fileio/init.py for these file types
 		init_files = [
 			'plant.ini',
 			'soil_plant.ini',
@@ -482,14 +484,14 @@ class ImportTextFiles(ExecutableApi):
 			'hmet_water.ini'
 		]
 		
-		for init_file in init_files:
-			if self.file_exists(init_file):
-				try:
-					# Initialization files need read() implementation
-					# Will be skipped until implemented
-					pass
-				except NotImplementedError:
-					pass
+		# When read() methods are implemented, use this pattern:
+		# for init_file in init_files:
+		#     if self.file_exists(init_file):
+		#         try:
+		#             # Call the appropriate read method
+		#             pass
+		#         except NotImplementedError:
+		#             pass
 		
 		return start_prog + allocated_prog
 	
@@ -535,7 +537,8 @@ class ImportTextFiles(ExecutableApi):
 		
 		# Import various operations files
 		# Note: These files currently don't have read() implementations
-		# They are listed here for completeness and will be skipped gracefully
+		# They are listed here for completeness and will be imported when read() is implemented
+		# TODO: Implement read() methods in fileio/ops.py for these file types
 		ops_files = [
 			'harv.ops',
 			'graze.ops',
@@ -545,14 +548,14 @@ class ImportTextFiles(ExecutableApi):
 			'chem_app.ops'
 		]
 		
-		for ops_file in ops_files:
-			if self.file_exists(ops_file):
-				try:
-					# Operations files need read() implementation
-					# Will be skipped until implemented
-					pass
-				except NotImplementedError:
-					pass
+		# When read() methods are implemented, use this pattern:
+		# for ops_file in ops_files:
+		#     if self.file_exists(ops_file):
+		#         try:
+		#             # Call the appropriate read method
+		#             pass
+		#         except NotImplementedError:
+		#             pass
 		
 		return start_prog + allocated_prog
 	

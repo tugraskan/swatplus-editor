@@ -129,8 +129,8 @@ if __name__ == '__main__':
 		api = WriteFiles(args.project_db_file, args.swat_version, args.ignore_files, args.ignore_cio_files, args.custom_cio_files)
 		api.write()
 	elif args.action == "import_text_files":
-		editor_version = "3.0.0" if args.editor_version is None else args.editor_version
-		swat_version = "60.5.4" if args.swat_version is None else args.swat_version
+		editor_version = ImportTextFiles.DEFAULT_EDITOR_VERSION if args.editor_version is None else args.editor_version
+		swat_version = ImportTextFiles.DEFAULT_SWAT_VERSION if args.swat_version is None else args.swat_version
 		api = ImportTextFiles(args.project_db_file, args.txtinout_dir, editor_version, swat_version)
 		api.import_files()
 	elif args.action == "create_database":

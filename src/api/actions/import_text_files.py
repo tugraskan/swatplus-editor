@@ -18,17 +18,22 @@ class ImportTextFiles(ExecutableApi):
 	This allows users to recreate a project database from existing text files.
 	"""
 	
-	def __init__(self, project_db_file, txtinout_dir, editor_version='3.0.0', swat_version='60.5.4'):
+	# Default version constants
+	DEFAULT_EDITOR_VERSION = '3.0.0'
+	DEFAULT_SWAT_VERSION = '60.5.4'
+	DATABASE_TYPE_PROJECT = 'project'
+	
+	def __init__(self, project_db_file, txtinout_dir, editor_version=None, swat_version=None):
 		self.__abort = False
 		SetupProjectDatabase.init(project_db_file)
 		self.project_db_file = project_db_file
 		self.project_db = project_base.db
 		self.txtinout_dir = txtinout_dir
-		self.editor_version = editor_version
-		self.swat_version = swat_version
+		self.editor_version = editor_version or self.DEFAULT_EDITOR_VERSION
+		self.swat_version = swat_version or self.DEFAULT_SWAT_VERSION
 		
 		if not os.path.exists(txtinout_dir):
-			sys.exit('The TxtInOut directory {dir} does not exist. Please provide a valid path.'.format(dir=txtinout_dir))
+			sys.exit('The TxtInOut directory {dir} does not exist. Please verify the path exists and try again.'.format(dir=txtinout_dir))
 	
 	def __del__(self):
 		SetupProjectDatabase.close()
@@ -231,7 +236,7 @@ class ImportTextFiles(ExecutableApi):
 		# Import soils_lte.sol if it exists
 		if self.file_exists("soils_lte.sol"):
 			try:
-				soils.Soils_lte_sol(self.get_file_path("soils_lte.sol"), self.editor_version, self.swat_version).read('project')
+				soils.Soils_lte_sol(self.get_file_path("soils_lte.sol"), self.editor_version, self.swat_version).read(self.DATABASE_TYPE_PROJECT)
 			except NotImplementedError:
 				pass
 		

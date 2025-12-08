@@ -228,10 +228,13 @@ class ImportTextFiles(ExecutableApi):
 		"""Import soil files."""
 		self.emit_progress(start_prog, "Importing soil files...")
 		
+		# Database type constant
+		DB_PROJECT = 'project'
+		
 		# Import soils_lte.sol if it exists
 		if self.file_exists("soils_lte.sol"):
 			try:
-				soils.Soils_lte_sol(self.get_file_path("soils_lte.sol"), self.editor_version, self.swat_version).read('project')
+				soils.Soils_lte_sol(self.get_file_path("soils_lte.sol"), self.editor_version, self.swat_version).read(DB_PROJECT)
 			except NotImplementedError:
 				pass
 		
@@ -502,7 +505,7 @@ class ImportTextFiles(ExecutableApi):
 		
 		if self.file_exists("management.sch"):
 			try:
-				lum.Management_sch(self.get_file_path("management.sch")).read()
+				lum.Management_sch(self.get_file_path("management.sch"), self.editor_version, self.swat_version).read()
 			except NotImplementedError:
 				pass
 		

@@ -228,13 +228,10 @@ class ImportTextFiles(ExecutableApi):
 		"""Import soil files."""
 		self.emit_progress(start_prog, "Importing soil files...")
 		
-		# Database type constant
-		DB_PROJECT = 'project'
-		
 		# Import soils_lte.sol if it exists
 		if self.file_exists("soils_lte.sol"):
 			try:
-				soils.Soils_lte_sol(self.get_file_path("soils_lte.sol"), self.editor_version, self.swat_version).read(DB_PROJECT)
+				soils.Soils_lte_sol(self.get_file_path("soils_lte.sol"), self.editor_version, self.swat_version).read('project')
 			except NotImplementedError:
 				pass
 		
@@ -266,29 +263,27 @@ class ImportTextFiles(ExecutableApi):
 		"""Import connection files."""
 		self.emit_progress(start_prog, "Importing connection files...")
 		
-		# Import various connection files
-		# Note: These files currently don't have read() implementations
-		# They are listed here for completeness and will be imported when read() is implemented
-		# TODO: Implement read() methods in fileio/connect.py for these file types
-		connect_files = {
-			'hru.con': connect.Hru_con,
-			'hru-lte.con': connect.Hru_lte_con,
-			'rout_unit.con': connect.Rout_unit_con,
-			'aquifer.con': connect.Aquifer_con,
-			'channel.con': connect.Channel_con,
-			'reservoir.con': connect.Reservoir_con,
-			'recall.con': connect.Recall_con,
-			'exco.con': connect.Exco_con,
-			'delratio.con': connect.Delratio_con,
-			'outlet.con': connect.Outlet_con
-		}
-		
-		# When read() methods are implemented, use this pattern:
+		# Note: Connection files currently don't have read() implementations
+		# The following dictionary documents which files should be processed here
+		# When read() methods are implemented in fileio/connect.py, uncomment the loop below
+		# 
+		# connect_files = {
+		#     'hru.con': connect.Hru_con,
+		#     'hru-lte.con': connect.Hru_lte_con,
+		#     'rout_unit.con': connect.Rout_unit_con,
+		#     'aquifer.con': connect.Aquifer_con,
+		#     'channel.con': connect.Channel_con,
+		#     'reservoir.con': connect.Reservoir_con,
+		#     'recall.con': connect.Recall_con,
+		#     'exco.con': connect.Exco_con,
+		#     'delratio.con': connect.Delratio_con,
+		#     'outlet.con': connect.Outlet_con
+		# }
+		# 
 		# for filename, file_class in connect_files.items():
 		#     if self.file_exists(filename):
 		#         try:
-		#             # Call the appropriate read method
-		#             pass
+		#             file_class(self.get_file_path(filename), self.editor_version, self.swat_version).read()
 		#         except NotImplementedError:
 		#             pass
 		
@@ -468,27 +463,20 @@ class ImportTextFiles(ExecutableApi):
 		"""Import initialization files."""
 		self.emit_progress(start_prog, "Importing initialization files...")
 		
-		# Import various initialization files
-		# Note: These files currently don't have read() implementations
-		# They are listed here for completeness and will be imported when read() is implemented
-		# TODO: Implement read() methods in fileio/init.py for these file types
-		init_files = [
-			'plant.ini',
-			'soil_plant.ini',
-			'om_water.ini',
-			'pest_hru.ini',
-			'pest_water.ini',
-			'path_hru.ini',
-			'path_water.ini',
-			'hmet_hru.ini',
-			'hmet_water.ini'
-		]
-		
-		# When read() methods are implemented, use this pattern:
+		# Note: Initialization files currently don't have read() implementations
+		# The following list documents which files should be processed here
+		# When read() methods are implemented in fileio/init.py, uncomment the loop below
+		#
+		# init_files = [
+		#     'plant.ini', 'soil_plant.ini', 'om_water.ini',
+		#     'pest_hru.ini', 'pest_water.ini', 'path_hru.ini',
+		#     'path_water.ini', 'hmet_hru.ini', 'hmet_water.ini'
+		# ]
+		#
 		# for init_file in init_files:
 		#     if self.file_exists(init_file):
 		#         try:
-		#             # Call the appropriate read method
+		#             # Call appropriate init file class read() method
 		#             pass
 		#         except NotImplementedError:
 		#             pass
@@ -535,24 +523,19 @@ class ImportTextFiles(ExecutableApi):
 		"""Import operations files."""
 		self.emit_progress(start_prog, "Importing operations files...")
 		
-		# Import various operations files
-		# Note: These files currently don't have read() implementations
-		# They are listed here for completeness and will be imported when read() is implemented
-		# TODO: Implement read() methods in fileio/ops.py for these file types
-		ops_files = [
-			'harv.ops',
-			'graze.ops',
-			'irr.ops',
-			'sweep.ops',
-			'fire.ops',
-			'chem_app.ops'
-		]
-		
-		# When read() methods are implemented, use this pattern:
+		# Note: Operations files currently don't have read() implementations
+		# The following list documents which files should be processed here
+		# When read() methods are implemented in fileio/ops.py, uncomment the loop below
+		#
+		# ops_files = [
+		#     'harv.ops', 'graze.ops', 'irr.ops',
+		#     'sweep.ops', 'fire.ops', 'chem_app.ops'
+		# ]
+		#
 		# for ops_file in ops_files:
 		#     if self.file_exists(ops_file):
 		#         try:
-		#             # Call the appropriate read method
+		#             # Call appropriate ops file class read() method
 		#             pass
 		#         except NotImplementedError:
 		#             pass

@@ -264,7 +264,8 @@ class ImportTextFiles(ExecutableApi):
 		self.emit_progress(start_prog, "Importing connection files...")
 		
 		# Import various connection files
-		# Note: These typically don't have read() implemented, but we list them for completeness
+		# Note: These files currently don't have read() implementations
+		# They are listed here for completeness and will be skipped gracefully
 		connect_files = {
 			'hru.con': connect.Hru_con,
 			'hru-lte.con': connect.Hru_lte_con,
@@ -281,7 +282,8 @@ class ImportTextFiles(ExecutableApi):
 		for filename, file_class in connect_files.items():
 			if self.file_exists(filename):
 				try:
-					# Connection files would need read implementation
+					# Connection files need read() implementation
+					# Will be skipped until implemented
 					pass
 				except NotImplementedError:
 					pass
@@ -463,6 +465,8 @@ class ImportTextFiles(ExecutableApi):
 		self.emit_progress(start_prog, "Importing initialization files...")
 		
 		# Import various initialization files
+		# Note: These files currently don't have read() implementations
+		# They are listed here for completeness and will be skipped gracefully
 		init_files = [
 			'plant.ini',
 			'soil_plant.ini',
@@ -478,7 +482,8 @@ class ImportTextFiles(ExecutableApi):
 		for init_file in init_files:
 			if self.file_exists(init_file):
 				try:
-					# Initialization files would need read implementation
+					# Initialization files need read() implementation
+					# Will be skipped until implemented
 					pass
 				except NotImplementedError:
 					pass
@@ -526,6 +531,8 @@ class ImportTextFiles(ExecutableApi):
 		self.emit_progress(start_prog, "Importing operations files...")
 		
 		# Import various operations files
+		# Note: These files currently don't have read() implementations
+		# They are listed here for completeness and will be skipped gracefully
 		ops_files = [
 			'harv.ops',
 			'graze.ops',
@@ -538,7 +545,8 @@ class ImportTextFiles(ExecutableApi):
 		for ops_file in ops_files:
 			if self.file_exists(ops_file):
 				try:
-					# Operations files would need read implementation
+					# Operations files need read() implementation
+					# Will be skipped until implemented
 					pass
 				except NotImplementedError:
 					pass

@@ -13,22 +13,25 @@ import sys
 import os
 import argparse
 import sqlite3
+import subprocess
 from pathlib import Path
 
 
 def create_example_database(project_db, datasets_db):
 	"""Create an example project database."""
 	print("Creating project database...")
-	cmd = f"""python swatplus_api.py create_database \
-		--db_type project \
-		--db_file "{project_db}" \
-		--db_file2 "{datasets_db}" \
-		--project_name "Example Import Project" \
-		--editor_version "3.0.0" """
+	cmd = [
+		"python", "swatplus_api.py", "create_database",
+		"--db_type", "project",
+		"--db_file", project_db,
+		"--db_file2", datasets_db,
+		"--project_name", "Example Import Project",
+		"--editor_version", "3.0.0"
+	]
 	
-	result = os.system(cmd)
-	if result != 0:
-		print(f"Error creating database: {result}")
+	result = subprocess.run(cmd, capture_output=True, text=True)
+	if result.returncode != 0:
+		print(f"Error creating database: {result.stderr}")
 		return False
 	
 	print("✓ Project database created successfully")
@@ -38,15 +41,17 @@ def create_example_database(project_db, datasets_db):
 def import_text_files(project_db, txtinout_dir):
 	"""Import text files from TxtInOut directory."""
 	print(f"\nImporting text files from {txtinout_dir}...")
-	cmd = f"""python swatplus_api.py import_text_files \
-		--project_db_file "{project_db}" \
-		--txtinout_dir "{txtinout_dir}" \
-		--editor_version "3.0.0" \
-		--swat_version "60.5.4" """
+	cmd = [
+		"python", "swatplus_api.py", "import_text_files",
+		"--project_db_file", project_db,
+		"--txtinout_dir", txtinout_dir,
+		"--editor_version", "3.0.0",
+		"--swat_version", "60.5.4"
+	]
 	
-	result = os.system(cmd)
-	if result != 0:
-		print(f"Error importing text files: {result}")
+	result = subprocess.run(cmd, capture_output=True, text=True)
+	if result.returncode != 0:
+		print(f"Error importing text files: {result.stderr}")
 		return False
 	
 	print("✓ Text files imported successfully")

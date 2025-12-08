@@ -7,9 +7,19 @@ The `import_text_files` action allows you to import existing SWAT+ text files fr
 - Text files from another source that you want to import into the SWAT+ Editor
 - A need to recreate the database from a backup of text files
 
+## Two Versions Available
+
+### 1. Standard Version (`swatplus_api.py`)
+Full-featured API with all SWAT+ actions. Use when working with the complete swatplus-editor repository.
+
+### 2. Standalone Version (`swatplus_api_standalone.py`) ⭐ **Recommended for Extensions**
+Self-contained, bundled version designed specifically for integration with VS Code extensions and other tools.
+
+---
+
 ## Usage
 
-### Command Line
+### Standard API
 
 ```bash
 python swatplus_api.py import_text_files \
@@ -19,13 +29,262 @@ python swatplus_api.py import_text_files \
   --swat_version 60.5.4
 ```
 
+### Standalone API (for bundling in extensions)
+
+```bash
+python swatplus_api_standalone.py import_text_files \
+  --project_db_file /path/to/project.sqlite \
+  --txtinout_dir /path/to/TxtInOut \
+  --editor_version 3.0.0 \
+  --swat_version 60.5.4
+```
+
 ### Parameters
 
 - `project_db_file` (required): Full path to the project SQLite database file
-  - If the file doesn't exist, you should create it first using the `create_database` action
 - `txtinout_dir` (required): Full path to the TxtInOut directory containing SWAT+ text files
 - `editor_version` (optional): Editor version string (default: "3.0.0")
 - `swat_version` (optional): SWAT+ version string (default: "60.5.4")
+
+---
+
+## Standalone Version for VS Code Extensions
+
+### What is `swatplus_api_standalone.py`?
+
+A **self-contained, bundled version** of the import functionality specifically designed for integration with VS Code extensions and other tools. It provides the same import capabilities as the standard API but with enhanced features for extension integration.
+
+### Key Features
+
+1. **Self-Contained**
+   - Works independently without the full swatplus-editor repository
+   - All necessary code in one script
+   - Only requires Python + dependencies (peewee, flask)
+
+2. **Extension-Friendly**
+   - Real-time unbuffered output for progress tracking in UI
+   - Enhanced error messages with validation
+   - Clear argument requirements and helpful `--help` output
+   - Structured output perfect for extension progress notifications
+
+3. **Simplified Interface**
+   - Focused solely on `import_text_files` action
+   - No unnecessary dependencies or imports
+   - Cleaner argument parsing
+
+### How It Works
+
+The standalone version works by:
+
+1. **Self-Contained Imports**: Uses `sys.path.insert()` to find modules relative to its location
+2. **Unbuffered Output**: Flushes stdout immediately so extensions can show real-time progress
+3. **Enhanced Validation**: Checks paths and provides clear error messages before attempting import
+4. **Graceful Error Handling**: Catches exceptions and provides useful debugging information
+
+### Integration with VS Code Extensions
+
+#### Extension Structure
+```
+your-vscode-extension/
+├── src/
+│   ├── extension.ts          # Main extension code
+│   └── importHelper.ts       # Helper to call Python script
+├── python-scripts/           # Bundled Python code
+│   ├── swatplus_api_standalone.py  ← The standalone script
+│   ├── actions/
+│   │   ├── __init__.py
+│   │   └── import_text_files.py
+│   ├── database/
+│   │   └── project/ (entire folder)
+│   ├── fileio/
+│   │   └── *.py (all fileio modules)
+│   └── helpers/
+│       └── *.py (all helper modules)
+└── package.json
+```
+
+#### How Extension Calls the Script
+
+**TypeScript/JavaScript Code:**
+```typescript
+import * as vscode from 'vscode';
+import * as path from 'path';
+import { spawn } from 'child_process';
+
+export class ImportHelper {
+    private pythonPath: string;
+    private apiPath: string;
+
+    constructor(context: vscode.ExtensionContext) {
+        const config = vscode.workspace.getConfiguration('your-extension');
+        this.pythonPath = config.get('pythonPath', 'python');
+        
+        // Use bundled standalone script
+        this.apiPath = path.join(
+            context.extensionPath, 
+            'python-scripts', 
+            'swatplus_api_standalone.py'
+        );
+    }
+
+    async importTextFiles(txtinoutDir: string, dbPath: string): Promise<void> {
+        return vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: "Importing SWAT+ text files",
+            cancellable: false
+        }, async (progress) => {
+            const args = [
+                this.apiPath,
+                'import_text_files',
+                '--project_db_file', dbPath,
+                '--txtinout_dir', txtinoutDir
+            ];
+
+            return new Promise((resolve, reject) => {
+                const proc = spawn(this.pythonPath, args);
+                
+                // Real-time progress updates
+                proc.stdout.on('data', (data) => {
+                    const msg = data.toString().trim();
+                    console.log(msg);
+                    progress.report({ message: msg });
+                });
+
+                proc.stderr.on('data', (data) => {
+                    console.error(data.toString());
+                });
+
+                proc.on('close', (code) => {
+                    if (code === 0) {
+                        vscode.window.showInformationMessage(
+                            `Database created successfully: ${dbPath}`
+                        );
+                        resolve();
+                    } else {
+                        reject(new Error(`Import failed with code ${code}`));
+                    }
+                });
+            });
+        });
+    }
+}
+```
+
+#### What Happens When User Triggers Import
+
+1. **User Action**: Clicks "Import to Database" button in extension
+2. **Extension**: Shows save dialog for database location
+3. **Extension**: Builds command with paths to Python and standalone script
+4. **Extension**: Spawns Python process with `import_text_files` action
+5. **Python Script**: 
+   - Validates TxtInOut directory exists
+   - Validates paths and arguments
+   - Prints progress messages (unbuffered for real-time display)
+   - Imports files in dependency order
+   - Returns exit code 0 on success
+6. **Extension**: Shows progress in VS Code notification
+7. **Extension**: Displays success/error message when complete
+
+### Instructions for Extension Developers
+
+To integrate the standalone version into your VS Code extension:
+
+#### Step 1: Bundle the Python Scripts
+
+Copy these files from `swatplus-editor/src/api/` to your extension's `python-scripts/` folder:
+- `swatplus_api_standalone.py` (the main script)
+- `actions/` folder (with `import_text_files.py`)
+- `database/project/` folder (all database models)
+- `fileio/` folder (all fileio modules)
+- `helpers/` folder (all helper modules)
+
+#### Step 2: Update Extension Configuration
+
+Add Python path setting to `package.json`:
+```json
+"configuration": {
+  "properties": {
+    "your-extension.pythonPath": {
+      "type": "string",
+      "default": "python",
+      "description": "Path to Python executable"
+    }
+  }
+}
+```
+
+#### Step 3: Create Import Helper
+
+Use the TypeScript code example above to create an import helper class.
+
+#### Step 4: Register Extension Command
+
+```typescript
+const importHelper = new ImportHelper(context);
+
+const importCommand = vscode.commands.registerCommand(
+    'your-extension.importTextFiles', 
+    async () => {
+        // Get TxtInOut directory from user
+        const txtinoutUri = await vscode.window.showOpenDialog({
+            canSelectFiles: false,
+            canSelectFolders: true,
+            openLabel: 'Select TxtInOut Folder'
+        });
+        
+        if (!txtinoutUri) return;
+        
+        // Get save location for database
+        const dbUri = await vscode.window.showSaveDialog({
+            filters: { 'SQLite Database': ['sqlite', 'db'] },
+            saveLabel: 'Create Database'
+        });
+        
+        if (!dbUri) return;
+        
+        // Perform import
+        await importHelper.importTextFiles(
+            txtinoutUri[0].fsPath, 
+            dbUri.fsPath
+        );
+    }
+);
+
+context.subscriptions.push(importCommand);
+```
+
+#### Step 5: Ensure Python Dependencies
+
+Users need Python installed with these dependencies:
+- `peewee` (database ORM)
+- `flask` (only if using other SWAT+ features)
+
+Your extension can check for dependencies or provide installation instructions.
+
+### Benefits for Extension Users
+
+1. **No Separate Repository**: Don't need to clone swatplus-editor
+2. **Simple Setup**: Just configure Python path in extension settings
+3. **Self-Contained**: All scripts bundled with the extension
+4. **Real-Time Feedback**: See import progress in VS Code notifications
+5. **Integrated Workflow**: Import directly from dataset selection in extension
+
+### Troubleshooting
+
+**Script not found:**
+- Ensure `python-scripts` folder is included in extension package
+- Check `.vscodeignore` doesn't exclude Python files
+
+**Import errors:**
+- Verify user has Python installed
+- Check Python dependencies (peewee) are installed
+- Validate TxtInOut directory path
+
+**No progress output:**
+- Standalone version uses unbuffered output by default
+- Check stdout handling in extension code
+
+---
 
 ## Prerequisites
 

@@ -2,14 +2,20 @@ from helpers.executable_api import ExecutableApi, Unbuffered
 from database.project.setup import SetupProjectDatabase
 from database.project import base as project_base
 from database.project.config import Project_config
-from fileio import connect, exco, dr, recall, climate, channel, aquifer, hydrology, reservoir, hru, lum, soils, init, routing_unit, regions, salts, simulation, hru_parm_db, config, ops, structural, decision_table, basin, change, water_rights, gwflow
 from helpers import utils
+
+# Import all fileio modules
+from fileio import (
+	connect, exco, dr, recall, climate, channel, aquifer, hydrology, 
+	reservoir, hru, lum, soils, init, routing_unit, regions, salts, 
+	simulation, hru_parm_db, config, ops, structural, decision_table, 
+	basin, change, water_rights, gwflow
+)
 
 import sys
 import argparse
 import os.path
 import os
-from datetime import datetime
 
 
 class ImportTextFiles(ExecutableApi):
@@ -24,7 +30,6 @@ class ImportTextFiles(ExecutableApi):
 	DATABASE_TYPE_PROJECT = 'project'
 	
 	def __init__(self, project_db_file, txtinout_dir, editor_version=None, swat_version=None):
-		self.__abort = False
 		SetupProjectDatabase.init(project_db_file)
 		self.project_db_file = project_db_file
 		self.project_db = project_base.db

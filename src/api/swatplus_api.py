@@ -11,6 +11,7 @@ from actions.reimport_gis import ReimportGis
 from actions.run_all import RunAll
 from actions.load_scenarios import LoadScenarios
 from actions.get_swatplus_check import GetSwatplusCheck
+from actions.import_text_files import ImportTextFiles
 from database import soils
 
 import sys
@@ -19,7 +20,7 @@ import argparse
 if __name__ == '__main__':
 	sys.stdout = Unbuffered(sys.stdout)
 	parser = argparse.ArgumentParser(description="SWAT+ Editor API")
-	parser.add_argument("action", type=str, help="name of the API action: setup_project, import_gis, import_weather, read_output, write_files, import_csv, export_csv, update_project, reimport_gis, run")
+	parser.add_argument("action", type=str, help="name of the API action: setup_project, import_gis, import_weather, read_output, write_files, import_csv, export_csv, update_project, reimport_gis, run, import_text_files")
 
 	parser.add_argument("--project_db_file", type=str, help="full path of project SQLite database file", nargs="?")
 	parser.add_argument("--delete_existing", type=str, help="y/n delete existing data first", nargs="?")
@@ -75,6 +76,9 @@ if __name__ == '__main__':
 	parser.add_argument("--year_end", type=str, help="ending year of simulation (omit to use weather files dates)", nargs="?")
 	parser.add_argument("--day_end", type=str, help="ending day of simulation (omit to use weather files dates)", nargs="?")
 	parser.add_argument("--input_files_dir", type=str, help="full path of where to write input files, defaults to Scenarios/Default/TxtInOut", nargs="?")
+	
+	# import text files
+	parser.add_argument("--txtinout_dir", type=str, help="full path of TxtInOut directory containing text files to import", nargs="?")
 
 	# write files
 	parser.add_argument("--ignore_files", type=lambda s: [item for item in s.split(',')], help="list of file names to not write", nargs="?")
@@ -124,6 +128,11 @@ if __name__ == '__main__':
 	elif args.action == "write_files":
 		api = WriteFiles(args.project_db_file, args.swat_version, args.ignore_files, args.ignore_cio_files, args.custom_cio_files)
 		api.write()
+	elif args.action == "import_text_files":
+		editor_version = "3.0.0" if args.editor_version is None else args.editor_version
+		swat_version = "60.5.4" if args.swat_version is None else args.swat_version
+		api = ImportTextFiles(args.project_db_file, args.txtinout_dir, editor_version, swat_version)
+		api.import_files()
 	elif args.action == "create_database":
 		if args.db_type == "datasets":
 			api = CreateDatasetsDb(args.db_file)

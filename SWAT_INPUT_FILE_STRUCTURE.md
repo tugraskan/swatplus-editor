@@ -1244,7 +1244,7 @@ The models are organized by functional categories such as Climate, Hydrology, So
 
 | Column Order | Column Name | Type | Constraints | PK | FK | Reference |
 |--------------|-------------|------|-------------|----|----|-----------|
-| 1 | sourceid | PrimaryKeyField | - |  |  | - |
+| 1 | sourceid | PrimaryKeyField | - | ✓ |  | - |
 | 2 | sourcecat | CharField | - |  |  | - |
 | 3 | hyd_typ | CharField | NULL |  |  | - |
 | 4 | sinkid | IntegerField | - |  |  | - |
@@ -1295,7 +1295,7 @@ The models are organized by functional categories such as Climate, Hydrology, So
 
 | Column Order | Column Name | Type | Constraints | PK | FK | Reference |
 |--------------|-------------|------|-------------|----|----|-----------|
-| 1 | zone_id | IntegerField | PK | ✓ |  | - |
+| 1 | zone_id | IntegerField | - | ✓ |  | - |
 | 2 | aquifer_k | DoubleField | NULL |  |  | - |
 | 3 | specific_yield | DoubleField | NULL |  |  | - |
 | 4 | streambed_k | DoubleField | NULL |  |  | - |
@@ -1305,7 +1305,7 @@ The models are organized by functional categories such as Climate, Hydrology, So
 
 | Column Order | Column Name | Type | Constraints | PK | FK | Reference |
 |--------------|-------------|------|-------------|----|----|-----------|
-| 1 | cell_id | IntegerField | PK | ✓ |  | - |
+| 1 | cell_id | IntegerField | - | ✓ |  | - |
 | 2 | status | IntegerField | NULL |  |  | - |
 | 3 | zone | ForeignKeyField | ON_DELETE=CASCADE |  | ✓ | Gwflow_zone |
 | 4 | elevation | DoubleField | NULL |  |  | - |

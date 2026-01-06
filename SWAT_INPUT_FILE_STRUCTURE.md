@@ -2,6 +2,20 @@
 
 This document describes the file structure of all SWAT+ input files based on the database model definitions.
 
+## Overview
+
+This documentation covers **222 input models** organized into **28 categories**. Each model table includes:
+
+- **Column Order**: The sequential position of each field
+- **Column Name**: The name of the field/column
+- **Type**: The data type (CharField, IntegerField, DoubleField, ForeignKeyField, etc.)
+- **Constraints**: Additional constraints like UNIQUE, NULL, DEFAULT values, ON_DELETE actions
+- **PK**: Indicates if the column is a Primary Key (✓ if yes)
+- **FK**: Indicates if the column is a Foreign Key (✓ if yes)
+- **Reference**: For foreign keys, shows which table/model is referenced
+
+The models are organized by functional categories such as Climate, Hydrology, Soils, Connect (connectivity), and more.
+
 ## Table of Contents
 
 - [Aquifer](#aquifer)

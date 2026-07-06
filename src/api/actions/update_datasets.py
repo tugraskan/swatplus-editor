@@ -116,24 +116,24 @@ class UpdateDatasets(ExecutableApi):
 		if not self.name_exists(dataset_print_prt_object, 'gwflow_obs'): dataset_print_prt_object.create(name='gwflow_obs', daily=0, monthly=0, yearly=0, avann=0, print_prt_id=1)
 		if not self.name_exists(dataset_print_prt_object, 'gwflow_pump'): dataset_print_prt_object.create(name='gwflow_pump', daily=0, monthly=0, yearly=0, avann=0, print_prt_id=1)
 
-		#try:
-		db = SqliteDatabase(datasets_db, timeout=10)
+		try:
+			db = SqliteDatabase(datasets_db, timeout=10)
 
-		# Drop the broken index before migrations
-		db.execute_sql('DROP INDEX IF EXISTS management_sch_auto_plant1_id')
-		db.execute_sql('DROP INDEX IF EXISTS management_sch_auto_plant2_id')
+			# Drop the broken index before migrations
+			db.execute_sql('DROP INDEX IF EXISTS management_sch_auto_plant1_id')
+			db.execute_sql('DROP INDEX IF EXISTS management_sch_auto_plant2_id')
 
-		migrator = SqliteMigrator(db)
-		# Run migrations separately
-		with db.atomic():
-			migrate(migrator.add_column('codes_bsn', 'idc_till', IntegerField(default=3)))
+			migrator = SqliteMigrator(db)
+			# Run migrations separately
+			with db.atomic():
+				migrate(migrator.add_column('codes_bsn', 'idc_till', IntegerField(default=3)))
 
-		with db.atomic():
-			migrate(migrator.rename_column('codes_bsn', 'i_fpwet', 'qual2e', legacy=False))
+			with db.atomic():
+				migrate(migrator.rename_column('codes_bsn', 'i_fpwet', 'qual2e', legacy=False))
 
-		db.close()
-		#except Exception:
-		#	pass
+			db.close()
+		except Exception:
+			sys.exit("Error trying to update swatplus_datasets.sqlite codes_bsn table for 4.0. Please download the 4.0 version online and replace your current datasets database with it. Then re-run the update process.")
 	
 	def updates_for_3_2_0(self, datasets_db):
 		if not self.name_exists(dataset_file_cio_classification, 'out_path'): dataset_file_cio_classification.insert(name='out_path').execute()
@@ -159,7 +159,7 @@ class UpdateDatasets(ExecutableApi):
 		dataset_file_cio.update({dataset_file_cio.default_file_name: 'gwflow.con'}).where(dataset_file_cio.default_file_name == 'modflow.con').execute()
 		dataset_file_cio.update({dataset_file_cio.default_file_name: 'pesticide.pst'}).where(dataset_file_cio.default_file_name == 'pesticide.pes').execute()
 		datasets_hru_parm_db.Pesticide_pst.update({datasets_hru_parm_db.Pesticide_pst.aq_hlife: 142.85, datasets_hru_parm_db.Pesticide_pst.ben_hlife: 20}).execute()
-		datasets_basin.Codes_bsn.update({datasets_basin.Codes_bsn.i_fpwet: 1}).execute()
+		#datasets_basin.Codes_bsn.update({datasets_basin.Codes_bsn.i_fpwet: 1}).execute()
 
 		self.plant_value_updates_for_3_0_0(datasets_hru_parm_db.Plants_plt)
 		self.cal_parms_value_updates_for_3_0_0(datasets_change.Cal_parms_cal)

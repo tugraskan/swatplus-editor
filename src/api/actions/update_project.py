@@ -68,10 +68,11 @@ class UpdateProject(ExecutableApi):
 			rel_datasets_db = os.path.relpath(datasets_db, base_path)
 			m.reference_db = rel_datasets_db
 
+		# Disabled in 4.0 because datasets update is separated and should not need this check here.
 		# Ensure correct version of datasets db
-		ver_check = SetupDatasetsDatabase.check_version(datasets_db, new_version, True)
+		"""ver_check = SetupDatasetsDatabase.check_version(datasets_db, new_version, True)
 		if ver_check is not None:
-			sys.exit(ver_check)
+			sys.exit(ver_check)"""
 		
 		# Find matching upgrade path
 		version = m.editor_version
@@ -150,7 +151,7 @@ class UpdateProject(ExecutableApi):
 
 			db.close()
 		except:
-			pass # Ignore errors from migrations
+			sys.exit("Error trying to update your project sqlite codes_bsn table for 4.0. Please contact the user group and post a link for the team to download your project.")
 		
 			
 	def migrate_gwflow_4_0_0(self, project_db):
@@ -483,7 +484,7 @@ class UpdateProject(ExecutableApi):
 
 		hru_parm_db.Pesticide_pst.update({hru_parm_db.Pesticide_pst.aq_hlife: 142.85, hru_parm_db.Pesticide_pst.ben_hlife: 20}).execute()
 
-		basin.Codes_bsn.update({basin.Codes_bsn.i_fpwet: 1}).execute()
+		#basin.Codes_bsn.update({basin.Codes_bsn.i_fpwet: 1}).execute()
 
 		self.plant_value_updates_for_3_0_0(hru_parm_db.Plants_plt)
 

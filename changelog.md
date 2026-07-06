@@ -2,6 +2,11 @@
 
 ## Version 3 ##
 
+### Revision 4.0.1 ###
+
+* Bug fix related to codes_bsn/i_fpwet column name change giving an error on new project setups using an old swatplus_datasets.sqlite version.
+* **IMPORTANT:** Time-series recall (point source/inlet) data is still not supported in this release. Please keep using version 3.2.x and do not upgrade yet if you need recall.
+
 ### Revision 4.0.0 ###
 **IMPORTANT:** This new version of the editor is only compatible with SWAT+ rev. 62 and later. Due to structural model changes, rev. 61 and earlier are NOT supported. Project updates are available after software update.
 

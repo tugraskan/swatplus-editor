@@ -61,13 +61,14 @@ def automatic_updates(project_db):
 			if lib.exists_table(conn, 'plants_plt'):
 				lib.delete_table(project_db, 'plants_plt')
 	
-	if lib.exists_table(conn, 'codes_bsn'):
+	# Disable below due to column name change in 4.0.
+	"""if lib.exists_table(conn, 'codes_bsn'):
 		m = Project_config.get_or_none()
 		if m is not None and (m.editor_version == '3.0.0' or m.editor_version == '3.0.1'):
 			cb = basin.Codes_bsn.get_or_none()
 			if cb is not None and cb.i_fpwet == 2:
 				basin.Codes_bsn.update({basin.Codes_bsn.i_fpwet: 1}).execute()
-				Project_config.update({Project_config.editor_version: '3.0.2'}).execute()
+				Project_config.update({Project_config.editor_version: '3.0.2'}).execute()"""
 
 	if lib.exists_table(conn, 'file_cio'):
 		config_cols = lib.get_column_names(conn, 'file_cio')
@@ -155,17 +156,17 @@ class SetupProject(ExecutableApi):
 				if int(ver) < 40:
 					raise Exception("QSWAT+ version 4.0 or higher is required for new projects in SWAT+ Editor 4. Please either update your QSWAT+ or use version 3.x of the editor instead.")
 
+			# Run dataset updates if needed
+			SetupDatasetsDatabase.init(datasets_db)
+			version = Version.get_or_none()
+			if version is not None and update_datasets.available_to_update(version.value):
+				update_datasets.UpdateDatasets(editor_version, datasets_db)
+
 			self.emit_progress(10, 'Creating database tables...')
 			SetupProjectDatabase.create_tables()
 			self.emit_progress(50, 'Copying data from SWAT+ datasets database...')
 			description = project_description if project_description is not None and project_description != 'null' else project_name
 			SetupProjectDatabase.initialize_data(description, is_lte, overwrite_plants=OVERWRITE_PLANTS)
-
-			# Run updates if needed
-			SetupDatasetsDatabase.init(datasets_db)
-			version = Version.get_or_none()
-			if version is not None and update_datasets.available_to_update(version.value):
-				update_datasets.UpdateDatasets(editor_version, datasets_db)
 
 			existing_config = Project_config.get_or_none()
 			if existing_config is not None and existing_config.editor_version is not None and update_project.available_to_update(existing_config.editor_version):

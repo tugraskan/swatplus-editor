@@ -2,7 +2,7 @@
 
 #define SWATPlusVersion "4.0"
 #define SWATPlusPatchVersion "0"
-#define SWATPlusToolsPatchVersion "0"
+#define SWATPlusToolsPatchVersion "1"
 #define QSWATPlusVersion "4.0"
 #define QSWATPlusPatchVersion "1"
 #define ToolboxVersion "4"

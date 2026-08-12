@@ -22,7 +22,7 @@ AppPublisher=Texas A&M AgriLife Research
 AppPublisherURL={#SWATURL}
 AppSupportURL={#SWATURL}
 AppUpdatesURL={#SWATURL}
-OutputBaseFilename=swatplus-windows-installer-{#SWATPlusVersion}.{#SWATPlusToolsPatchVersion}
+OutputBaseFilename=swatplus-windows-installer-{#SWATPlusVersion}.{#SWATPlusToolsPatchVersion}-arcgis
 OutputDir=output
 ArchitecturesInstallIn64BitMode=x64compatible
 LicenseFile=..\license.txt
@@ -37,7 +37,6 @@ SolidCompression=yes
 WizardStyle=modern
 
 [Files]
-Source: "data\downloads\QSWATPlus_{#QSWATPlusVersion}.{#QSWATPlusPatchVersion}_Installer.exe"; DestDir: "{tmp}"; Components: qswat; 
 Source: "dist\swatplus-editor-{#SWATPlusVersion}.{#SWATPlusPatchVersion}-win32-x64.exe"; DestDir: "{tmp}"; Components: editor; 
 Source: "data\downloads\SWATPlusToolbox-v{#ToolboxVersion}.{#ToolboxPatchVersion}-win-x64-Setup.exe"; DestDir: "{tmp}"; Components: toolbox; 
 Source: "data\downloads\SWATPlus-IAHRIS_{#IahrisVersion}_Setup.exe"; DestDir: "{tmp}"; Components: iahris;  
@@ -48,8 +47,8 @@ Source: "{tmp}\swatplus_wgn.zip"; DestDir: "{tmp}"; Flags: external; ExternalSiz
 Name: "{app}\Databases"
 
 [Components]
-Name: "qswat"; Description: "QSWAT+ QGIS interface {#QSWATPlusVersion}.{#QSWATPlusPatchVersion}"; Types: typical full custom
-Name: "qswat\swatGraph"; Description: "SWATGraph tool. Not needed if you have QSWAT."; Types: typical full custom
+Name: "qswat"; Description: "ArcSWAT+ Required Files"; Types: typical full custom
+Name: "qswat\swatGraph"; Description: "SWATGraph tool"; Types: typical full custom
 Name: "qswat\manual"; Description: "QSWAT+ user manual"; Types: typical full custom
 Name: "editor"; Description: "SWAT+ Editor {#SWATPlusVersion}.{#SWATPlusPatchVersion} (includes model rev. {#ModelVersion})"; Types: typical full custom
 Name: "toolbox"; Description: "SWAT+ Toolbox {#ToolboxVersion}.{#ToolboxPatchVersion}"; Types: typical full custom
@@ -63,19 +62,18 @@ Name: "full"; Description: "Full installation"
 Name: "custom"; Description: "Custom installation"; Flags: iscustom
 
 [Files]
-Source: "data\downloads\SWATPlus\*"; DestDir: "{app}"; Excludes: "\Tools\SWATGraph, \Documents, \TauDEM539Bin"; Components: qswat; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "data\downloads\SWATPlus\*"; DestDir: "{app}"; Excludes: "\Tools\SWATGraph, \Documents"; Components: qswat; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "data\downloads\SWATPlus\Tools\SWATGraph\runSWATGraph.bat"; DestDir: "{app}\Tools\SWATGraph"; Components: qswat\swatGraph; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "data\downloads\SWATPlus\Documents\QSWATPlus Manual_v3.0.pdf"; DestDir: "{app}\Documents"; Components: qswat\manual;  Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Run]
-Filename: "{tmp}\QSWATPlus_{#QSWATPlusVersion}.{#QSWATPlusPatchVersion}_Installer.exe"; Parameters: "/S {code:InstallTypeFlag}"; WorkingDir: "{tmp}"; Flags: skipifdoesntexist
 Filename: "{tmp}\swatplus-editor-{#SWATPlusVersion}.{#SWATPlusPatchVersion}-win32-x64.exe"; Parameters: "/S {code:InstallTypeFlag} /D=""{app}\SWATPlusEditor"""; WorkingDir: "{tmp}"; Flags: skipifdoesntexist
 Filename: "{tmp}\SWATPlusToolbox-v{#ToolboxVersion}.{#ToolboxPatchVersion}-win-x64-Setup.exe"; Parameters: "/S {code:TbInstallTypeFlag}"; WorkingDir: "{tmp}"; Flags: skipifdoesntexist shellexec
 Filename: "{tmp}\SWATPlus-IAHRIS_{#IahrisVersion}_Setup.exe"; Parameters: "/silent {code:TbInstallTypeFlag}"; WorkingDir: "{tmp}"; Flags: skipifdoesntexist shellexec
 
 [Messages]
-SelectDirBrowseLabel=If you select a different location from the default, you will need to set this location in the QSWAT+ Parameters form the first time you run QSWAT+.
-ConfirmUninstall=Are you sure you want to remove %1? SWAT+ Editor, SWAT+ Toolbox, tools, and documents will be removed. The QSWAT+ plugin will need to be uninstalled separately.
+SelectDirBrowseLabel=If you select a different location from the default, you will need to set this location in the ArcSWAT+ Parameters form the first time you run ArcSWAT+.
+ConfirmUninstall=Are you sure you want to remove %1? SWAT+ Editor, SWAT+ Toolbox, tools, and documents will be removed. The ArcSWAT+ plugin will need to be uninstalled separately.
 
 [UninstallRun]
 Filename: "{app}\SWATPlusEditor\Uninstall SWATPlusEditor.exe"; WorkingDir: "{app}\SWATPlusEditor"; Flags: skipifdoesntexist; RunOnceId: "SWATPlusEditor"

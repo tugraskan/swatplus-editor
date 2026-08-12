@@ -6,7 +6,7 @@ class Plants_plt(base.BaseModel):
 	plnt_typ = CharField()
 	gro_trig = CharField()
 	nfix_co = DoubleField()
-	days_mat = DoubleField()
+	days_mat = DoubleField() #change to int next minor version; current precision override in fileio
 	bm_e = DoubleField()
 	harv_idx = DoubleField()
 	lai_pot = DoubleField()
@@ -39,7 +39,7 @@ class Plants_plt(base.BaseModel):
 	plnt_decomp = DoubleField()
 	lai_min = DoubleField()
 	bm_tree_acc = DoubleField()
-	yrs_mat = DoubleField()
+	yrs_mat = DoubleField() #change to int next minor version; current precision override in fileio
 	bm_tree_max = DoubleField()
 	ext_co = DoubleField()
 	leaf_tov_mn = DoubleField()

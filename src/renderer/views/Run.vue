@@ -128,6 +128,7 @@
 			currentPids: [],
 			killMode: true,
 			hasCorrectOutput: false,
+			executionSuccessful: false
 		},
 		status: {
 			inputs: false,
@@ -248,8 +249,8 @@
 	let modelIssues:any = reactive({
 		wgn: {
 			is_invalid: false,
-			data: <any[]>[],
-			error: <string|null>null,
+			data: [] as any[],
+			error: null as string | null,
 			saving: false
 		}
 	});
@@ -404,6 +405,7 @@
 		data.page.submitted = true;
 		data.task.killMode = false;
 		data.task.hasCorrectOutput = false;
+		data.task.executionSuccessful = false;
 
 		if (noneSelected.value) {
 			data.page.saveError = 'Please select at least one task to run';
@@ -579,6 +581,11 @@
 
 		listeners.stdoutSwat = runProcess.processStdout('run-swat', (stdData:any) => {
 			let str = stdData.toString().trim();
+
+			if (str.includes("Execution successfully completed")) {
+				data.task.executionSuccessful = true;
+			}
+
 			let arr = str.split(' ').filter(function(el:any) { return el !== '' });
 			let yrIdx = arr.indexOf('Yr');
 			if (yrIdx > -1) {
@@ -610,6 +617,13 @@
 
 		listeners.stderrSwat = runProcess.processStderr('run-swat', async (stdData:any) => {
 			console.log(`stderr: ${stdData}`);
+
+			// Check if execution was already marked successful from stdout
+			if (data.task.executionSuccessful) {
+				console.log('False exit code detected.Ignoring stderr because execution completed successfully.');
+				return;
+			}
+
 			data.task.error = 'There was an error running SWAT+';
 			if (data.task.modelMessages.length > 500) data.task.modelMessages = [];
 			data.task.modelMessages.push(stdData);
@@ -1126,7 +1140,7 @@ Please check your TxtInOut/diagnostics.out file for any information, and contact
 								Stations with missing data are listed below.
 							</p>
 							<ul>
-								<li v-for="station in modelIssues.wgn.data">
+								<li v-for="(station, i) in modelIssues.wgn.data" :key="i">
 									Station <router-link class="text-warning" :to="`/edit/climate/wgn/edit/${station.id}`">{{ station.name }}</router-link> has <b>{{ station.months }}</b> months of data; 12 are required.
 								</li>
 							</ul>

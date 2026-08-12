@@ -74,7 +74,7 @@ class Parameters_bsn(base.BaseModel):
 	cov_mgt = DoubleField()
 	cha_d50 = DoubleField()
 	co2 = DoubleField()
-	day_lag_max = DoubleField()
+	day_lag_max = DoubleField() #change to int next minor version; current precision override in fileio
 	igen = IntegerField()
 
 

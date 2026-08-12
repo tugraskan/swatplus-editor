@@ -1,7 +1,12 @@
+### SWAT+ Editor 4.0.2 ###
+
+* Bug fix affecting gfortran compiling: print plants.plt days_mat and yrs_mat as integer instead of decimals.
+* Work-around fix affecting instances where the model has an error exit code despite the model running successfully.
+* **IMPORTANT:** Time-series recall (point source/inlet) data is still not supported in this release. Please keep using version 3.2.x and do not upgrade yet if you need recall.
+
 ### SWAT+ Editor 4.0.1 ###
 
 * Bug fix related to codes_bsn/i_fpwet column name change giving an error on new project setups using an old swatplus_datasets.sqlite version.
-* **IMPORTANT:** Time-series recall (point source/inlet) data is still not supported in this release. Please keep using version 3.2.x and do not upgrade yet if you need recall.
 
 ### SWAT+ Editor 4.0.0 ###
 **IMPORTANT:** This new version of the editor is only compatible with SWAT+ rev. 62 and later. Due to structural model changes, rev. 61 and earlier are NOT supported. Project updates are available after software update.

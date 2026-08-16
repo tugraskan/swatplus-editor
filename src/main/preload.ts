@@ -57,6 +57,16 @@ contextBridge.exposeInMainWorld('electronApi', {
 	setColorTheme: (colorTheme:string) => {return ipcRenderer.send('set-color-theme', colorTheme) },
 	getColorTheme: () => {return ipcRenderer.sendSync('get-color-theme') },
 
+	//Contributing a record to the authoritative reference database
+	referenceDbConfig: async () => { return await ipcRenderer.invoke('reference-db-config') },
+	referenceDbAuthStatus: async () => { return await ipcRenderer.invoke('reference-db-auth-status') },
+	referenceDbSignInToken: async (token:string) => { return await ipcRenderer.invoke('reference-db-sign-in-token', token) },
+	referenceDbDeviceStart: async () => { return await ipcRenderer.invoke('reference-db-device-start') },
+	referenceDbDevicePoll: async (deviceCode:string, interval:number, expiresIn:number) => { return await ipcRenderer.invoke('reference-db-device-poll', deviceCode, interval, expiresIn) },
+	referenceDbSignOut: async () => { return await ipcRenderer.invoke('reference-db-sign-out') },
+	referenceDbGetFile: async (filePath:string) => { return await ipcRenderer.invoke('reference-db-get-file', filePath) },
+	referenceDbSubmit: async (submission:any) => { return await ipcRenderer.invoke('reference-db-submit', submission) },
+
 	loadFromContextMenu: (callback:(data:any) => any) => {
 		let channel = `load-from-context-menu`;
 		const subscription = (_event:any, data:any) => callback(data);

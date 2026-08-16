@@ -155,6 +155,13 @@
 
 					<v-card class="mb-6">
 						<v-list>
+							<v-list-subheader class="text-uppercase">Contribute</v-list-subheader>
+							<reference-db-submit></reference-db-submit>
+						</v-list>
+					</v-card>
+
+					<v-card class="mb-6">
+						<v-list>
 							<v-list-subheader class="text-uppercase">User Groups</v-list-subheader>
 							<v-list-item @click="utilities.openUrl('https://groups.google.com/d/forum/swatplus')" border="t" class="text-primary">
 								<template #prepend><v-icon class="text-medium-emphasis">fas fa-users</v-icon></template>

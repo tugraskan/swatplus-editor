@@ -55,39 +55,29 @@ def records(table_key):
 	abort(405, 'HTTP Method not allowed.')
 
 
-@bp.route('/preview', methods=['POST'])
-def preview():
+@bp.route('/plan', methods=['POST'])
+def plan():
+	"""Work out what a batch of chosen records would change, given the current
+	contents of each affected file upstream."""
 	if request.method == 'POST':
 		project_db = request.headers.get(rh.PROJECT_DB)
 		has_db, error = rh.init(project_db)
 		if not has_db: abort(400, error)
 
 		args = request.get_json(silent=True) or {}
-		table_key = args.get('table')
-		record_id = args.get('id')
-		existing_file_text = args.get('existing_file_text')
+		items = args.get('items')
+		existing_files = args.get('existing_files')
 
-		if table_key is None or record_id is None:
+		if not isinstance(items, list):
 			rh.close()
-			abort(400, 'Both a table and a record id are required.')
-
-		try:
-			serialized = reference_submission.serialize_record(table_key, record_id)
-		except ValueError as e:
+			abort(400, 'A list of records to submit is required.')
+		if not isinstance(existing_files, dict):
 			rh.close()
-			abort(400, str(e))
+			abort(400, 'The current contents of each affected file are required.')
 
-		errors, warnings = reference_submission.validate_row(serialized, existing_file_text)
+		result = reference_submission.plan_submission(items, existing_files)
+		result['title'] = reference_submission.describe_submission(result['summary'], result['files'])
 		rh.close()
-
-		result = dict(serialized)
-		result['errors'] = errors
-		result['warnings'] = warnings
-		result['valid'] = len(errors) == 0
-
-		if existing_file_text is not None and len(errors) == 0:
-			result['file_contents'] = reference_submission.build_file_contents(
-				existing_file_text, serialized['row_line'])
 
 		return jsonify(result)
 

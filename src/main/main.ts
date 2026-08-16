@@ -533,7 +533,7 @@ ipcMain.handle('reference-db-get-file', async (event, filePath: string) => {
 })
 
 ipcMain.handle('reference-db-submit', async (event, submission: any) => {
-	return await githubResult(() => github.submitRecord(submission));
+	return await githubResult(() => github.submitRecords(submission));
 })
 
 ipcMain.on('open-file-dialog', (event, options) => {

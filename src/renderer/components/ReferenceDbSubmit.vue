@@ -1,19 +1,33 @@
 <script setup lang="ts">
 	/**
-	 * Propose one of the current project's database records for inclusion in
-	 * the SWAT+ authoritative reference database, as a pull request.
+	 * Propose records from the current project for inclusion in the SWAT+
+	 * authoritative reference database, as a single pull request.
 	 *
-	 * The row is formatted by the editor's own file writers (via the API), so
-	 * the pull request is a single added line in the same format the reference
-	 * database already stores. Authentication and the GitHub calls happen in
-	 * the main process; no token is handled here.
+	 * Records are staged into a basket first, so one submission can carry
+	 * several records across several files. Each staged record is classified
+	 * against the reference database as it currently stands -- a name that is
+	 * not there yet is an addition, a name that is there with different values
+	 * is an update, and a name that already matches is dropped.
+	 *
+	 * Rows are formatted by the editor's own file writers (via the API), so the
+	 * pull request reads as one added or changed line per record.
+	 * Authentication and the GitHub calls happen in the main process; no token
+	 * is handled here.
 	 */
 	import { computed, reactive, ref, watch } from 'vue';
 	import { useHelpers } from '@/helpers';
-	import type { ReferenceDbPreview, ReferenceDbTable } from '@/typings';
+	import type { ReferenceDbPlan, ReferenceDbTable } from '@/typings';
 
 	const { api, constants, currentProject, errors, utilities } = useHelpers();
 	const electron = window.electronApi;
+
+	interface StagedRecord {
+		table: string;
+		tableLabel: string;
+		fileName: string;
+		id: number;
+		name: string;
+	}
 
 	const show = ref(false);
 	const step = ref(1);
@@ -51,30 +65,61 @@
 	const unsupported = ref<{ file_name: string, reason: string }[]>([]);
 	const records = ref<{ id: number, name: string }[]>([]);
 
-	const selection = reactive({
+	const picker = reactive({
 		table: null as string | null,
-		recordId: null as number | null,
-		reason: '',
-		source: '',
-		notes: ''
+		recordIds: [] as number[]
 	});
 
-	const preview = ref<ReferenceDbPreview | null>(null);
-	/** Blob sha the preview was built from, carried into the submission so an
-	 *  upstream change made in between is caught rather than overwritten. */
-	const previewFileSha = ref('');
-	const result = ref<{ url: string, number: number, usedFork: boolean } | null>(null);
+	const staged = ref<StagedRecord[]>([]);
+	const details = reactive({ reason: '', source: '', notes: '' });
 
-	const selectedTable = computed(() => tables.value.find(t => t.key === selection.table) || null);
-	const canPreview = computed(() => selection.table !== null && selection.recordId !== null);
+	const plan = ref<ReferenceDbPlan | null>(null);
+	/** Blob sha each file was read at, carried into the submission so an
+	 *  upstream change made in between is caught rather than overwritten. */
+	const fileShas = ref<Record<string, string>>({});
+	const result = ref<{ url: string, number: number, usedFork: boolean, fileCount: number } | null>(null);
+
+	const selectedTable = computed(() => tables.value.find(t => t.key === picker.table) || null);
+	const canStage = computed(() => picker.table !== null && picker.recordIds.length > 0);
+	const canReview = computed(() => staged.value.length > 0);
 	const canSubmit = computed(() =>
-		auth.authenticated && preview.value !== null && preview.value.valid && !page.submitting);
+		auth.authenticated && plan.value !== null && plan.value.valid && !page.submitting);
+
+	/** Records already staged should not be offered again. */
+	const availableRecords = computed(() => {
+		const taken = new Set(staged.value.filter(s => s.table === picker.table).map(s => s.id));
+		return records.value.filter(r => !taken.has(r.id));
+	});
+
+	const stagedByFile = computed(() => {
+		const groups: Record<string, StagedRecord[]> = {};
+		for (const record of staged.value) (groups[record.fileName] ??= []).push(record);
+		return groups;
+	});
+
+	function operationColor(operation: string) {
+		if (operation === 'add') return 'success';
+		if (operation === 'update') return 'info';
+		return 'medium-emphasis';
+	}
+
+	function operationLabel(operation: string) {
+		if (operation === 'add') return 'New';
+		if (operation === 'update') return 'Update';
+		return 'No change';
+	}
 
 	async function open() {
 		show.value = true;
 		step.value = 1;
 		result.value = null;
-		preview.value = null;
+		plan.value = null;
+		staged.value = [];
+		picker.table = null;
+		picker.recordIds = [];
+		details.reason = '';
+		details.source = '';
+		details.notes = '';
 		page.error = null;
 
 		const config = await electron.referenceDbConfig();
@@ -162,13 +207,12 @@
 
 	async function loadRecords() {
 		records.value = [];
-		selection.recordId = null;
-		preview.value = null;
-		if (selection.table === null) return;
+		picker.recordIds = [];
+		if (picker.table === null) return;
 
 		page.loading = true;
 		try {
-			const response = await api.get(`reference-db/records/${selection.table}`, currentProject.getApiHeader());
+			const response = await api.get(`reference-db/records/${picker.table}`, currentProject.getApiHeader());
 			records.value = response.data.records;
 		} catch (error) {
 			page.error = errors.logError(error, 'Unable to load records for this table.');
@@ -176,57 +220,86 @@
 		page.loading = false;
 	}
 
+	function stageSelected() {
+		if (selectedTable.value === null) return;
+		for (const id of picker.recordIds) {
+			const record = records.value.find(r => r.id === id);
+			if (record === undefined) continue;
+			staged.value.push({
+				table: selectedTable.value.key,
+				tableLabel: selectedTable.value.label,
+				fileName: selectedTable.value.file_name,
+				id: record.id,
+				name: record.name
+			});
+		}
+		picker.recordIds = [];
+		plan.value = null;
+	}
+
+	function unstage(record: StagedRecord) {
+		staged.value = staged.value.filter(s => !(s.table === record.table && s.id === record.id));
+		plan.value = null;
+	}
+
 	/**
-	 * Fetch the file as it currently stands upstream, then have the API format
-	 * the row and check it against that file. Doing it in this order is what
-	 * lets duplicate names and column drift be caught before anything is
-	 * pushed to GitHub.
+	 * Read every affected file as it currently stands upstream, then have the
+	 * API work out what each staged record would do to it. Doing it in this
+	 * order is what lets updates, no-op records and column drift be identified
+	 * before anything is pushed to GitHub.
 	 */
-	async function buildPreview() {
-		if (!canPreview.value || selectedTable.value === null) return;
+	async function buildPlan() {
+		if (!canReview.value) return;
 
 		page.loading = true;
 		page.error = null;
-		preview.value = null;
+		plan.value = null;
+		fileShas.value = {};
 
-		const filePath = `database_files/${selectedTable.value.file_name}`;
-		const file = await electron.referenceDbGetFile(filePath);
-		if (!file.ok || !file.data) {
-			page.error = file.error ?? 'Unable to read the current file from the reference database.';
-			page.loading = false;
-			return;
+		const existingFiles: Record<string, string> = {};
+		for (const fileName of Object.keys(stagedByFile.value)) {
+			const file = await electron.referenceDbGetFile(`database_files/${fileName}`);
+			if (!file.ok || !file.data) {
+				page.error = file.error ?? `Unable to read ${fileName} from the reference database.`;
+				page.loading = false;
+				return;
+			}
+			existingFiles[fileName] = file.data.text;
+			fileShas.value[fileName] = file.data.sha;
 		}
 
 		try {
-			const response = await api.post('reference-db/preview', {
-				table: selection.table,
-				id: selection.recordId,
-				existing_file_text: file.data.text
+			const response = await api.post('reference-db/plan', {
+				items: staged.value.map(s => ({ table: s.table, id: s.id })),
+				existing_files: existingFiles
 			}, currentProject.getApiHeader());
-			preview.value = response.data;
-			previewFileSha.value = file.data.sha;
+			plan.value = response.data;
 			step.value = 2;
 		} catch (error) {
-			page.error = errors.logError(error, 'Unable to prepare this record for submission.');
+			page.error = errors.logError(error, 'Unable to prepare these records for submission.');
 		}
 		page.loading = false;
 	}
 
 	async function submit() {
-		if (!canSubmit.value || preview.value === null || selectedTable.value === null) return;
+		if (!canSubmit.value || plan.value === null) return;
 
 		page.submitting = true;
 		page.error = null;
 
 		const response = await electron.referenceDbSubmit({
-			filePath: `database_files/${selectedTable.value.file_name}`,
-			fileContents: preview.value.file_contents ?? '',
-			recordName: preview.value.record_name,
-			tableLabel: preview.value.label,
-			baseFileSha: previewFileSha.value,
-			reason: selection.reason,
-			source: selection.source,
-			notes: selection.notes,
+			files: plan.value.files.map(f => ({
+				path: `database_files/${f.file_name}`,
+				contents: f.contents,
+				baseSha: fileShas.value[f.file_name]
+			})),
+			title: plan.value.title,
+			records: plan.value.items
+				.filter(i => i.operation !== 'unchanged' && i.valid)
+				.map(i => `${operationLabel(i.operation)}: \`${i.record_name}\` in \`${i.file_name}\``),
+			reason: details.reason,
+			source: details.source,
+			notes: details.notes,
 			editorVersion: constants.appSettings.version
 		});
 
@@ -244,7 +317,7 @@
 		device.active = false;
 	}
 
-	watch(() => selection.table, async () => await loadRecords());
+	watch(() => picker.table, async () => await loadRecords());
 
 	defineExpose({ open });
 </script>
@@ -252,23 +325,23 @@
 <template>
 	<v-list-item @click="open" border="t" class="text-primary">
 		<template #prepend><v-icon class="text-medium-emphasis">fas fa-code-pull-request</v-icon></template>
-		Contribute a Record to the Reference Database
+		Contribute Records to the Reference Database
 	</v-list-item>
 
 	<v-dialog v-model="show" :max-width="constants.dialogSizes.lg" scrollable>
 		<v-card>
-			<v-card-title>Contribute a Record to the Reference Database</v-card-title>
+			<v-card-title>Contribute Records to the Reference Database</v-card-title>
 
 			<v-card-text>
 				<error-alert :text="page.error"></error-alert>
 
-				<!-- Step 1: pick a record and sign in -->
+				<!-- Step 1: sign in, then stage the records to submit -->
 				<div v-if="step === 1">
 					<p class="text-medium-emphasis mb-4">
-						Propose one of this project's database records for inclusion in the
+						Propose records from this project for inclusion in the
 						<open-in-browser :url="repoUrl" :text="`${repo.owner}/${repo.repo}`" class="text-primary"></open-in-browser>
-						reference database. The editor formats the record exactly as that database stores it and opens a pull
-						request adding a single line. A reviewer there decides whether to merge it.
+						reference database. Add as many as you like, from as many tables as you like -- they go out together as
+						one pull request. A reviewer there decides whether to merge it.
 					</p>
 
 					<v-card variant="tonal" class="mb-4">
@@ -332,13 +405,40 @@
 						</v-card-text>
 					</v-card>
 
-					<v-select v-model="selection.table" :items="tables" item-title="label" item-value="key"
-						label="Database table" density="compact" class="mb-3"></v-select>
+					<div class="d-flex align-center ga-2 mb-3">
+						<v-select v-model="picker.table" :items="tables" item-title="label" item-value="key"
+							label="Database table" density="compact" hide-details style="max-width: 220px"></v-select>
 
-					<v-autocomplete v-model="selection.recordId" :items="records" item-title="name" item-value="id"
-						label="Record" density="compact" :disabled="selection.table === null"
-						:hint="selection.table === null ? 'Choose a table first' : `${records.length} records in this project`"
-						persistent-hint class="mb-3"></v-autocomplete>
+						<v-autocomplete v-model="picker.recordIds" :items="availableRecords" item-title="name" item-value="id"
+							label="Records" density="compact" hide-details multiple chips closable-chips
+							:disabled="picker.table === null"></v-autocomplete>
+
+						<v-btn color="primary" variant="flat" :disabled="!canStage" @click="stageSelected">Add</v-btn>
+					</div>
+
+					<v-table v-if="staged.length > 0" density="compact" class="mb-3 border rounded">
+						<thead>
+							<tr>
+								<th>Record</th>
+								<th>Table</th>
+								<th>File</th>
+								<th class="text-right">Remove</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr v-for="record in staged" :key="`${record.table}-${record.id}`">
+								<td>{{ record.name }}</td>
+								<td class="text-medium-emphasis">{{ record.tableLabel }}</td>
+								<td class="text-medium-emphasis"><code>{{ record.fileName }}</code></td>
+								<td class="text-right">
+									<v-btn icon="fas fa-xmark" variant="text" size="x-small" @click="unstage(record)"></v-btn>
+								</td>
+							</tr>
+						</tbody>
+					</v-table>
+					<p v-else class="text-medium-emphasis mb-3">
+						No records added yet. Choose a table, pick one or more records, then select Add.
+					</p>
 
 					<v-expansion-panels v-if="unsupported.length > 0" variant="accordion" class="mb-3">
 						<v-expansion-panel title="Why aren't all tables listed?">
@@ -352,42 +452,65 @@
 					</v-expansion-panels>
 				</div>
 
-				<!-- Step 2: review the formatted row and describe the change -->
-				<div v-else-if="step === 2 && preview !== null">
+				<!-- Step 2: review what each record would do, then describe the change -->
+				<div v-else-if="step === 2 && plan !== null">
 					<p class="text-medium-emphasis mb-3">
-						This is the exact line that will be added to
-						<code>database_files/{{ preview.file_name }}</code>.
+						{{ plan.summary.added }} to add, {{ plan.summary.updated }} to update<span
+							v-if="plan.summary.unchanged"> ({{ plan.summary.unchanged }} already up to date, so left out)</span>.
 					</p>
 
-					<div class="overflow-x-auto border rounded pa-3 mb-4 bg-surface-light">
-						<pre class="text-caption mb-0"><code>{{ preview.header_line }}
-{{ preview.row_line }}</code></pre>
-					</div>
-
-					<v-alert v-for="error in preview.errors" :key="error" type="error" variant="tonal" density="compact" class="mb-2">
+					<v-alert v-for="error in plan.errors" :key="error" type="error" variant="tonal" density="compact" class="mb-2">
 						{{ error }}
 					</v-alert>
-					<v-alert v-for="warning in preview.warnings" :key="warning" type="warning" variant="tonal" density="compact" class="mb-2">
-						{{ warning }}
-					</v-alert>
 
-					<v-alert v-if="preview.valid" type="success" variant="tonal" density="compact" class="mb-4">
-						This record passes the reference database's checks.
+					<v-expansion-panels variant="accordion" class="mb-4">
+						<v-expansion-panel v-for="item in plan.items" :key="`${item.table}-${item.record_id}`">
+							<v-expansion-panel-title>
+								<div class="d-flex align-center ga-3">
+									<v-chip size="x-small" :color="operationColor(item.operation)" variant="flat">
+										{{ operationLabel(item.operation) }}
+									</v-chip>
+									<span>{{ item.record_name }}</span>
+									<span class="text-medium-emphasis text-caption"><code>{{ item.file_name }}</code></span>
+									<v-icon v-if="item.errors.length > 0" size="small" class="text-error">fas fa-circle-exclamation</v-icon>
+								</div>
+							</v-expansion-panel-title>
+							<v-expansion-panel-text>
+								<div class="overflow-x-auto border rounded pa-3 mb-3 bg-surface-light">
+									<pre class="text-caption mb-0"><code>{{ item.header_line }}
+<template v-if="item.existing_row_line">- {{ item.existing_row_line }}
++ </template>{{ item.row_line }}</code></pre>
+								</div>
+
+								<v-alert v-for="error in item.errors" :key="error" type="error" variant="tonal" density="compact" class="mb-2">
+									{{ error }}
+								</v-alert>
+								<v-alert v-for="warning in item.warnings" :key="warning" type="warning" variant="tonal" density="compact" class="mb-2">
+									{{ warning }}
+								</v-alert>
+							</v-expansion-panel-text>
+						</v-expansion-panel>
+					</v-expansion-panels>
+
+					<v-alert v-if="plan.valid" type="success" variant="tonal" density="compact" class="mb-4">
+						These records pass the reference database's checks. They will be proposed as
+						<strong>{{ plan.title }}</strong>.
 					</v-alert>
 
 					<p class="text-medium-emphasis mb-3">
 						Everything below is optional, but it helps whoever reviews the change.
 					</p>
 
-					<v-textarea v-model="selection.reason" label="Reason for the change" rows="2" density="compact" class="mb-3"></v-textarea>
-					<v-textarea v-model="selection.source" label="Source (publication, dataset, documentation, or expert)" rows="2" density="compact" class="mb-3"></v-textarea>
-					<v-textarea v-model="selection.notes" label="Notes" rows="2" density="compact"></v-textarea>
+					<v-textarea v-model="details.reason" label="Reason for the change" rows="2" density="compact" class="mb-3"></v-textarea>
+					<v-textarea v-model="details.source" label="Source (publication, dataset, documentation, or expert)" rows="2" density="compact" class="mb-3"></v-textarea>
+					<v-textarea v-model="details.notes" label="Notes" rows="2" density="compact"></v-textarea>
 				</div>
 
 				<!-- Step 3: the pull request is open -->
 				<div v-else-if="step === 3 && result !== null">
 					<v-alert type="success" variant="tonal" class="mb-4">
-						Pull request #{{ result.number }} is open on the reference database.
+						Pull request #{{ result.number }} is open on the reference database,
+						covering {{ result.fileCount }} file<span v-if="result.fileCount !== 1">s</span>.
 					</v-alert>
 					<p class="mb-3">
 						<open-in-browser :url="result.url" :text="result.url" class="text-primary"></open-in-browser>
@@ -406,8 +529,8 @@
 				<v-spacer></v-spacer>
 				<v-btn variant="text" @click="close">{{ step === 3 ? 'Close' : 'Cancel' }}</v-btn>
 				<v-btn v-if="step === 1" color="primary" variant="flat"
-					:disabled="!canPreview" :loading="page.loading" @click="buildPreview">
-					Review Record
+					:disabled="!canReview" :loading="page.loading" @click="buildPlan">
+					Review {{ staged.length }} Record<span v-if="staged.length !== 1">s</span>
 				</v-btn>
 				<v-btn v-else-if="step === 2" color="primary" variant="flat"
 					:disabled="!canSubmit" :loading="page.submitting" @click="submit">

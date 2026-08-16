@@ -37,14 +37,20 @@ export const DEFAULT_CONFIG: ReferenceDbConfig = {
 	oauthClientId: ''
 };
 
+export interface SubmissionFile {
+	path: string;
+	contents: string;
+	/** Blob sha the contents were built from, so a change made upstream in the
+	 *  meantime is caught instead of being overwritten. */
+	baseSha?: string;
+}
+
 export interface SubmissionRequest {
-	filePath: string;
-	fileContents: string;
-	recordName: string;
-	tableLabel: string;
-	/** Blob sha the submitted contents were built from, so a change made
-	 *  upstream in the meantime is caught instead of being overwritten. */
-	baseFileSha?: string;
+	files: SubmissionFile[];
+	/** Commit message and pull-request title, built by the API from the plan. */
+	title: string;
+	/** Human-readable record list for the pull-request body. */
+	records?: string[];
 	reason?: string;
 	source?: string;
 	notes?: string;
@@ -308,9 +314,10 @@ export class GitHubClient {
 		return { owner: login, repo, isFork: true };
 	}
 
+
 	private buildPullRequestBody(request: SubmissionRequest) {
 		const blank = '_Not provided._';
-		return [
+		const lines = [
 			'## Reason',
 			'',
 			request.reason && request.reason.trim() ? request.reason.trim() : blank,
@@ -322,18 +329,34 @@ export class GitHubClient {
 			'## Notes',
 			'',
 			request.notes && request.notes.trim() ? request.notes.trim() : blank,
-			'',
+			''
+		];
+
+		if (request.records && request.records.length > 0) {
+			lines.push('## Records in this submission', '');
+			for (const record of request.records) lines.push(`- ${record}`);
+			lines.push('');
+		}
+
+		lines.push(
 			'---',
 			'',
-			`Submitted from SWAT+ Editor${request.editorVersion ? ` ${request.editorVersion}` : ''}.`,
-			`Adds the \`${request.recordName}\` record to \`${request.filePath}\`.`
-		].join('\n');
+			`Submitted from SWAT+ Editor${request.editorVersion ? ` ${request.editorVersion}` : ''}.`);
+
+		return lines.join('\n');
 	}
 
-	/** Create the branch, commit the one-line change, and open the pull request. */
-	async submitRecord(request: SubmissionRequest) {
+	/**
+	 * Commit every changed file in one commit and open the pull request.
+	 *
+	 * This goes through the git data API rather than the contents API because
+	 * the contents API writes one file per commit; a submission may span
+	 * several files and belongs in the history as a single change.
+	 */
+	async submitRecords(request: SubmissionRequest) {
 		const token = this.readToken();
 		if (!token) throw new Error('Sign in to GitHub before submitting.');
+		if (!request.files || request.files.length === 0) throw new Error('There is nothing to submit.');
 
 		const { owner, repo, branch } = this.config;
 		const user = await this.request('GET', '/user');
@@ -342,38 +365,60 @@ export class GitHubClient {
 		const baseRef = await this.request('GET', `/repos/${owner}/${repo}/git/ref/heads/${branch}`);
 		const baseSha = baseRef.object.sha;
 
-		const safeName = request.recordName.replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase();
-		const branchName = `add-${safeName}-${Date.now().toString(36)}`;
+		const stamp = Date.now().toString(36);
+		const firstName = request.files.length === 1 && request.records && request.records.length === 1
+			? request.records[0].replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
+			: 'records';
+		const branchName = `reference-db-${firstName}-${stamp}`;
 
 		await this.request('POST', `/repos/${head.owner}/${head.repo}/git/refs`, {
 			ref: `refs/heads/${branchName}`,
 			sha: baseSha
 		});
 
-		// The blob sha must come from the head repo on the new branch, which is
-		// where the update is being written.
-		const current = await this.request(
-			'GET', `/repos/${head.owner}/${head.repo}/contents/${encodeURIComponent(request.filePath)}?ref=${encodeURIComponent(branchName)}`);
-
-		// The submitted contents were assembled from the file as it looked when
-		// the record was reviewed. If it has moved since, the assembled text no
+		// Each file's contents were assembled from the version read when the
+		// submission was reviewed. If any has moved since, the assembled text no
 		// longer contains whatever changed, and committing it would quietly
 		// revert that change.
-		if (request.baseFileSha && current.sha !== request.baseFileSha) {
-			throw new Error(
-				`${request.filePath} changed in the reference database while you were reviewing this record. ` +
-				'Go back and review it again so your submission is based on the current file.');
+		for (const file of request.files) {
+			if (!file.baseSha) continue;
+			const current = await this.request(
+				'GET', `/repos/${head.owner}/${head.repo}/contents/${encodeURIComponent(file.path)}?ref=${encodeURIComponent(branchName)}`);
+			if (current.sha !== file.baseSha) {
+				throw new Error(
+					`${file.path} changed in the reference database while you were reviewing this submission. ` +
+					'Go back and review it again so your changes are based on the current files.');
+			}
 		}
 
-		await this.request('PUT', `/repos/${head.owner}/${head.repo}/contents/${encodeURIComponent(request.filePath)}`, {
-			message: `Add ${request.recordName} to ${request.filePath}`,
-			content: Buffer.from(request.fileContents, 'utf8').toString('base64'),
-			sha: current.sha,
-			branch: branchName
+		const baseCommit = await this.request('GET', `/repos/${head.owner}/${head.repo}/git/commits/${baseSha}`);
+
+		const tree: { path: string, mode: string, type: string, sha: string }[] = [];
+		for (const file of request.files) {
+			const blob = await this.request('POST', `/repos/${head.owner}/${head.repo}/git/blobs`, {
+				content: Buffer.from(file.contents, 'utf8').toString('base64'),
+				encoding: 'base64'
+			});
+			tree.push({ path: file.path, mode: '100644', type: 'blob', sha: blob.sha });
+		}
+
+		const newTree = await this.request('POST', `/repos/${head.owner}/${head.repo}/git/trees`, {
+			base_tree: baseCommit.tree.sha,
+			tree
+		});
+
+		const commit = await this.request('POST', `/repos/${head.owner}/${head.repo}/git/commits`, {
+			message: request.title,
+			tree: newTree.sha,
+			parents: [baseSha]
+		});
+
+		await this.request('PATCH', `/repos/${head.owner}/${head.repo}/git/refs/heads/${branchName}`, {
+			sha: commit.sha
 		});
 
 		const pullRequest = await this.request('POST', `/repos/${owner}/${repo}/pulls`, {
-			title: `Add ${request.recordName} to ${request.filePath}`,
+			title: request.title,
 			head: head.isFork ? `${user.login}:${branchName}` : branchName,
 			base: branch,
 			body: this.buildPullRequestBody(request),
@@ -384,7 +429,8 @@ export class GitHubClient {
 			url: pullRequest.html_url,
 			number: pullRequest.number,
 			branch: branchName,
-			usedFork: head.isFork
+			usedFork: head.isFork,
+			fileCount: request.files.length
 		};
 	}
 }

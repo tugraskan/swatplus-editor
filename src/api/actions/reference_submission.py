@@ -143,6 +143,8 @@ def serialize_record(table_key, record_id):
 	}
 
 
+
+
 def _is_number(value):
 	try:
 		float(value)
@@ -151,21 +153,49 @@ def _is_number(value):
 		return False
 
 
-def validate_row(serialized, existing_file_text=None):
-	"""Check a serialized row the way the reference repository's CI does.
+# The first two lines of every file are the "written by" line and the column
+# header; record rows start after them.
+HEADER_LINE_COUNT = 2
 
-	Returns (errors, warnings). Errors block submission; warnings do not.
-	When the current contents of the target file are supplied, the record name
-	is also checked for collision and the column header for drift -- the two
-	failures that depend on the file as it exists upstream rather than on the
-	row alone.
+
+def _record_rows(text):
+	"""Map record name -> its line, for the record rows of a file."""
+	rows = {}
+	for line in text.splitlines()[HEADER_LINE_COUNT:]:
+		fields = line.split()
+		if fields:
+			rows.setdefault(fields[0], line)
+	return rows
+
+
+def _apply_rows(text, replacements, additions):
+	"""Rewrite a file with some rows replaced in place and others appended.
+
+	Replacing in place rather than removing and re-appending is what keeps an
+	update to an existing record a one-line diff instead of a two-line move.
 	"""
+	lines = text.splitlines()
+	out = []
+	for index, line in enumerate(lines):
+		fields = line.split()
+		if index >= HEADER_LINE_COUNT and fields and fields[0] in replacements:
+			out.append(replacements[fields[0]])
+		else:
+			out.append(line)
+
+	out.extend(additions)
+	return '\n'.join(out) + '\n'
+
+
+def _validate_row(serialized, upstream_columns=None):
+	"""Check one formatted row. Whether the record already exists upstream is
+	decided by the caller -- an existing name is an update here, not an error."""
 	errors = []
 	warnings = []
 
 	name = serialized['record_name']
-	row_line = serialized['row_line']
 	columns = serialized['columns']
+	fields = serialized['row_line'].split()
 
 	if name is None or name.strip() == '' or name.strip().lower() == 'null':
 		errors.append("Record name is blank or 'null'. Give the record a real name before submitting.")
@@ -173,17 +203,13 @@ def validate_row(serialized, existing_file_text=None):
 	if name is not None and any(character.isspace() for character in name):
 		errors.append('Record name "{}" contains whitespace, which would split into extra columns.'.format(name))
 
-	fields = row_line.split()
-	# The trailing description column is free text that may contain spaces or
-	# be absent entirely, so it is excluded from strict field counting.
+	# The trailing description column is free text that may contain spaces or be
+	# absent entirely, so it is excluded from strict field counting.
 	required_field_count = max(len(columns) - 1, 1)
 	if len(fields) < required_field_count:
 		errors.append('Row has {} fields but {} expects at least {}.'.format(
 			len(fields), serialized['file_name'], required_field_count))
 
-	# Every column between the leading name and the trailing description is
-	# numeric in these files; a non-numeric value there is what the reference
-	# repository's validator rejects as a wrong data type.
 	for index in range(1, min(len(fields), required_field_count)):
 		value = fields[index]
 		column_name = columns[index] if index < len(columns) else 'column {}'.format(index + 1)
@@ -192,27 +218,13 @@ def validate_row(serialized, existing_file_text=None):
 		if not _is_number(value):
 			errors.append("Non-numeric value '{}' in column '{}'.".format(value, column_name))
 
-	if existing_file_text is not None:
-		existing_lines = existing_file_text.splitlines()
-		if len(existing_lines) >= 2:
-			upstream_columns = existing_lines[1].split()
-			if upstream_columns != columns:
-				missing = [c for c in upstream_columns if c not in columns]
-				new = [c for c in columns if c not in upstream_columns]
-				errors.append(
-					'Column headers do not match {} in the reference database '
-					'(missing: {}, new: {}). This usually means the editor and the '
-					'reference database are on different SWAT+ revisions.'.format(
-						serialized['file_name'], missing, new))
-
-			for line in existing_lines[2:]:
-				existing_fields = line.split()
-				if existing_fields and existing_fields[0] == name:
-					errors.append(
-						'The reference database already has a record named "{}" in {}. '
-						'Submitting it again would create a duplicate; rename your record '
-						'or propose an edit to the existing one instead.'.format(name, serialized['file_name']))
-					break
+	if upstream_columns is not None and upstream_columns != columns:
+		missing = [c for c in upstream_columns if c not in columns]
+		new = [c for c in columns if c not in upstream_columns]
+		errors.append(
+			'Column headers do not match {} in the reference database '
+			'(missing: {}, new: {}). This usually means the editor and the reference '
+			'database are on different SWAT+ revisions.'.format(serialized['file_name'], missing, new))
 
 	if len(fields) == required_field_count:
 		warnings.append('This record has no description. A short description helps reviewers.')
@@ -220,9 +232,125 @@ def validate_row(serialized, existing_file_text=None):
 	return errors, warnings
 
 
-def build_file_contents(existing_file_text, row_line):
-	"""Append the row to the file's existing contents, preserving the trailing
-	newline convention so the diff is exactly one added line."""
-	if existing_file_text.endswith('\n'):
-		return existing_file_text + row_line + '\n'
-	return existing_file_text + '\n' + row_line + '\n'
+def plan_submission(items, existing_files):
+	"""Work out what a batch of records would do to the reference database.
+
+	`items` is a list of {'table': key, 'id': record id}; `existing_files` maps
+	a file name to its current contents upstream. Each record is classified as
+	an addition, an update, or unchanged, and the resulting contents are built
+	per file so that one pull request can carry several records across several
+	files.
+	"""
+	results = []
+	submission_errors = []
+	upstream_rows = {name: _record_rows(text) for name, text in existing_files.items()}
+
+	# Per file: name -> replacement line, and the list of lines to append.
+	replacements = {}
+	additions = {}
+	seen = {}
+
+	for item in items:
+		table_key = item.get('table')
+		record_id = item.get('id')
+
+		try:
+			serialized = serialize_record(table_key, record_id)
+		except ValueError as e:
+			submission_errors.append(str(e))
+			continue
+
+		file_name = serialized['file_name']
+		name = serialized['record_name']
+		text = existing_files.get(file_name)
+
+		if text is None:
+			submission_errors.append(
+				'The current contents of {} were not supplied, so this record could not be checked.'.format(file_name))
+			continue
+
+		upstream_columns = None
+		upstream_lines = text.splitlines()
+		if len(upstream_lines) >= HEADER_LINE_COUNT:
+			upstream_columns = upstream_lines[1].split()
+
+		errors, warnings = _validate_row(serialized, upstream_columns)
+
+		key = (file_name, name)
+		if key in seen:
+			errors.append(
+				'"{}" is in this submission more than once. Each record can only be '
+				'submitted once per file.'.format(name))
+		seen[key] = True
+
+		existing_row = upstream_rows.get(file_name, {}).get(name)
+		if existing_row is None:
+			operation = 'add'
+		elif existing_row.rstrip() == serialized['row_line'].rstrip():
+			operation = 'unchanged'
+			warnings.append('This record already matches the reference database, so it will not be included.')
+		else:
+			operation = 'update'
+
+		result = dict(serialized)
+		result['operation'] = operation
+		result['existing_row_line'] = existing_row
+		result['errors'] = errors
+		result['warnings'] = warnings
+		result['valid'] = len(errors) == 0
+		results.append(result)
+
+		if errors or operation == 'unchanged':
+			continue
+
+		if operation == 'update':
+			replacements.setdefault(file_name, {})[name] = serialized['row_line']
+		else:
+			additions.setdefault(file_name, []).append(serialized['row_line'])
+
+	changed_file_names = set(replacements) | set(additions)
+	files = [
+		{
+			'file_name': file_name,
+			'contents': _apply_rows(
+				existing_files[file_name],
+				replacements.get(file_name, {}),
+				additions.get(file_name, []))
+		}
+		for file_name in sorted(changed_file_names)
+	]
+
+	if not items:
+		submission_errors.append('Choose at least one record to submit.')
+	elif not files and not submission_errors and all(r['valid'] for r in results):
+		submission_errors.append('Nothing to submit -- every record chosen already matches the reference database.')
+
+	summary = {
+		'added': sum(1 for r in results if r['operation'] == 'add' and r['valid']),
+		'updated': sum(1 for r in results if r['operation'] == 'update' and r['valid']),
+		'unchanged': sum(1 for r in results if r['operation'] == 'unchanged'),
+	}
+
+	return {
+		'items': results,
+		'files': files,
+		'errors': submission_errors,
+		'summary': summary,
+		'valid': not submission_errors and all(r['valid'] for r in results) and len(files) > 0,
+	}
+
+
+def describe_submission(summary, files):
+	"""Short title for the commit and the pull request."""
+	parts = []
+	if summary['added']:
+		parts.append('{} record{}'.format(summary['added'], '' if summary['added'] == 1 else 's'))
+	change = []
+	if parts:
+		change.append('Add ' + parts[0])
+	if summary['updated']:
+		change.append('update {} record{}'.format(summary['updated'], '' if summary['updated'] == 1 else 's'))
+
+	file_names = ', '.join(f['file_name'] for f in files)
+	action = ' and '.join(change) if change else 'Update records'
+	return '{} in {}'.format(action, file_names)

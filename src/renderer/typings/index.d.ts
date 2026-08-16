@@ -50,12 +50,16 @@ export interface ReferenceDbDeviceCode {
 	expiresIn: number;
 }
 
+export interface ReferenceDbSubmissionFile {
+	path: string;
+	contents: string;
+	baseSha?: string;
+}
+
 export interface ReferenceDbSubmission {
-	filePath: string;
-	fileContents: string;
-	recordName: string;
-	tableLabel: string;
-	baseFileSha?: string;
+	files: ReferenceDbSubmissionFile[];
+	title: string;
+	records?: string[];
 	reason?: string;
 	source?: string;
 	notes?: string;
@@ -67,6 +71,7 @@ export interface ReferenceDbPullRequest {
 	number: number;
 	branch: string;
 	usedFork: boolean;
+	fileCount: number;
 }
 
 export interface ReferenceDbTable {
@@ -76,7 +81,8 @@ export interface ReferenceDbTable {
 	docs_path: string;
 }
 
-export interface ReferenceDbPreview {
+/** One record in a planned submission, with what it would do upstream. */
+export interface ReferenceDbPlanItem {
 	table: string;
 	label: string;
 	file_name: string;
@@ -86,10 +92,20 @@ export interface ReferenceDbPreview {
 	header_line: string;
 	row_line: string;
 	columns: string[];
+	operation: 'add'|'update'|'unchanged';
+	existing_row_line: string|null;
 	errors: string[];
 	warnings: string[];
 	valid: boolean;
-	file_contents?: string;
+}
+
+export interface ReferenceDbPlan {
+	items: ReferenceDbPlanItem[];
+	files: { file_name: string, contents: string }[];
+	errors: string[];
+	summary: { added: number, updated: number, unchanged: number };
+	valid: boolean;
+	title: string;
 }
 
 export interface ProjectSettings {

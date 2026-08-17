@@ -34,9 +34,14 @@ def tables():
 
 @bp.route('/records/<table_key>', methods=['GET'])
 def records(table_key):
+	"""List records in a table. Pass ?changed_only=true to list only records
+	that differ from -- or don't exist in -- the editor's bundled default
+	dataset, so the picker can default to "what did I actually touch" instead
+	of every record in the table."""
 	if request.method == 'GET':
 		project_db = request.headers.get(rh.PROJECT_DB)
-		has_db, error = rh.init(project_db)
+		datasets_db = request.headers.get(rh.DATASETS_DB)
+		has_db, error = rh.init(project_db, datasets_db)
 		if not has_db: abort(400, error)
 
 		try:
@@ -45,10 +50,19 @@ def records(table_key):
 			rh.close()
 			abort(400, str(e))
 
-		items = [
-			{'id': m.id, 'name': m.name}
-			for m in table.model.select(table.model.id, table.model.name).order_by(table.model.name)
-		]
+		changed_only = request.args.get('changed_only') == 'true'
+
+		if changed_only:
+			if not datasets_db:
+				rh.close()
+				abort(400, 'Filtering by changed records requires the default dataset to be available.')
+			items = reference_submission.list_changed_records(table_key)
+		else:
+			items = [
+				{'id': m.id, 'name': m.name}
+				for m in table.model.select(table.model.id, table.model.name).order_by(table.model.name)
+			]
+
 		rh.close()
 		return jsonify({'records': items})
 

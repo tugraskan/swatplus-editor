@@ -85,15 +85,17 @@ def get_table(key):
 	return table
 
 
-def _write_table_to_text(table):
+def _write_table_to_text(table, database='project'):
 	"""Run the editor's own writer for this table into a temp file and return
 	its lines. Uses write() so every per-file quirk the writer applies --
 	description formatting, precision and padding overrides, row ordering --
-	is applied exactly as it would be for a real file write."""
+	is applied exactly as it would be for a real file write. `database` selects
+	the project's own table or the editor's bundled default dataset -- both are
+	written by the identical code path, so a row from either is comparable."""
 	handle, path = tempfile.mkstemp(suffix='-' + table.file_name)
 	os.close(handle)
 	try:
-		table.file_model(path).write()
+		table.file_model(path).write(database=database)
 		with open(path, 'r') as file:
 			return file.read().splitlines()
 	finally:
@@ -166,6 +168,56 @@ def _record_rows(text):
 		if fields:
 			rows.setdefault(fields[0], line)
 	return rows
+
+
+def _rows_from_lines(lines):
+	"""Same as _record_rows, for a writer's output already split into lines."""
+	rows = {}
+	for line in lines[HEADER_LINE_COUNT:]:
+		fields = line.split()
+		if fields:
+			rows.setdefault(fields[0], line)
+	return rows
+
+
+def list_changed_records(table_key):
+	"""Records in the project whose formatted row differs from -- or has no
+	counterpart in -- the editor's own bundled default dataset for this table.
+	A heuristic for "records the user likely added or changed themselves",
+	meant to narrow the record picker instead of listing every record in the
+	table (most of which, in most projects, are untouched stock defaults).
+
+	This compares against the *local* default dataset shipped with this copy
+	of the editor, not the reference database on GitHub -- the two can differ
+	if the reference database has moved on since this dataset was built. That
+	makes it a good proxy for "did I touch this", but not a substitute for the
+	real check against GitHub, which still happens when a record is reviewed
+	for submission.
+	"""
+	table = get_table(table_key)
+
+	project_rows = _rows_from_lines(_write_table_to_text(table, database='project'))
+	default_rows = _rows_from_lines(_write_table_to_text(table, database='datasets'))
+
+	changed = []
+	for record in table.model.select(table.model.id, table.model.name).order_by(table.model.name):
+		project_row = project_rows.get(record.name)
+		if project_row is None:
+			# The writer skipped or renamed this record on the way out (e.g. a
+			# blank name); nothing to compare it against.
+			continue
+
+		default_row = default_rows.get(record.name)
+		if default_row is None:
+			operation = 'add'
+		elif default_row.rstrip() != project_row.rstrip():
+			operation = 'update'
+		else:
+			continue  # matches the shipped default untouched -- not a change
+
+		changed.append({'id': record.id, 'name': record.name, 'operation': operation})
+
+	return changed
 
 
 def _apply_rows(text, replacements, additions):

@@ -63,12 +63,21 @@
 
 	const tables = ref<ReferenceDbTable[]>([]);
 	const unsupported = ref<{ file_name: string, reason: string }[]>([]);
-	const records = ref<{ id: number, name: string }[]>([]);
+	const records = ref<{ id: number, name: string, operation?: 'add' | 'update' }[]>([]);
+
+	/** Whether the last successful load actually applied the changed-only
+	 *  filter -- kept separate from the toggle itself so a load that fell back
+	 *  to the full list (e.g. no default dataset available) doesn't silently
+	 *  claim to be filtered. */
+	const recordsAreFiltered = ref(false);
 
 	const picker = reactive({
 		table: null as string | null,
-		recordIds: [] as number[]
+		recordIds: [] as number[],
+		onlyChanged: true
 	});
+
+	const hasDefaultDataset = computed(() => !!currentProject.datasetsDb);
 
 	const staged = ref<StagedRecord[]>([]);
 	const details = reactive({ reason: '', source: '', notes: '' });
@@ -210,10 +219,14 @@
 		picker.recordIds = [];
 		if (picker.table === null) return;
 
+		const useFilter = picker.onlyChanged && hasDefaultDataset.value;
+		const url = `reference-db/records/${picker.table}` + (useFilter ? '?changed_only=true' : '');
+
 		page.loading = true;
 		try {
-			const response = await api.get(`reference-db/records/${picker.table}`, currentProject.getApiHeader());
+			const response = await api.get(url, currentProject.getApiHeader());
 			records.value = response.data.records;
+			recordsAreFiltered.value = useFilter;
 		} catch (error) {
 			page.error = errors.logError(error, 'Unable to load records for this table.');
 		}
@@ -318,6 +331,7 @@
 	}
 
 	watch(() => picker.table, async () => await loadRecords());
+	watch(() => picker.onlyChanged, async () => await loadRecords());
 
 	defineExpose({ open });
 </script>
@@ -405,16 +419,44 @@
 						</v-card-text>
 					</v-card>
 
-					<div class="d-flex align-center ga-2 mb-3">
+					<v-checkbox v-model="picker.onlyChanged" density="compact" hide-details class="mb-1"
+						:disabled="!hasDefaultDataset" :label="hasDefaultDataset
+							? 'Only show records I\'ve added or changed from the defaults'
+							: 'Only show changed records (unavailable -- no default dataset loaded for this project)'">
+					</v-checkbox>
+
+					<div class="d-flex align-center ga-2 mb-1">
 						<v-select v-model="picker.table" :items="tables" item-title="label" item-value="key"
 							label="Database table" density="compact" hide-details style="max-width: 220px"></v-select>
 
 						<v-autocomplete v-model="picker.recordIds" :items="availableRecords" item-title="name" item-value="id"
 							label="Records" density="compact" hide-details multiple chips closable-chips
-							:disabled="picker.table === null"></v-autocomplete>
+							:disabled="picker.table === null">
+							<template #chip="{ item, props: chipProps }">
+								<v-chip v-bind="chipProps">
+									<v-icon v-if="item.raw.operation" size="x-small" class="mr-1"
+										:class="`text-${operationColor(item.raw.operation)}`">fas fa-circle</v-icon>
+									{{ item.raw.name }}
+								</v-chip>
+							</template>
+							<template #item="{ item, props: itemProps }">
+								<v-list-item v-bind="itemProps" :title="item.raw.name">
+									<template v-if="item.raw.operation" #append>
+										<v-chip size="x-small" :color="operationColor(item.raw.operation)" variant="flat">
+											{{ operationLabel(item.raw.operation) }}
+										</v-chip>
+									</template>
+								</v-list-item>
+							</template>
+						</v-autocomplete>
 
 						<v-btn color="primary" variant="flat" :disabled="!canStage" @click="stageSelected">Add</v-btn>
 					</div>
+
+					<p v-if="picker.table !== null && recordsAreFiltered && !page.loading && availableRecords.length === 0"
+						class="text-medium-emphasis text-caption mb-3">
+						No added or changed records found in this table. Uncheck the box above to see everything.
+					</p>
 
 					<v-table v-if="staged.length > 0" density="compact" class="mb-3 border rounded">
 						<thead>

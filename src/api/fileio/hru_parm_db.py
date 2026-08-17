@@ -45,8 +45,9 @@ class Fertilizer_frt(BaseFileModel):
 		else:
 			self.read_default_table(datasets_parmdb.Fertilizer_frt, datasets_base.db, 0, ignore_id_col=True)
 
-	def write(self):
-		self.write_default_table(db.Fertilizer_frt, True)
+	def write(self, database='project'):
+		table = project_parmdb.Fertilizer_frt if database == 'project' else datasets_parmdb.Fertilizer_frt
+		self.write_default_table(table, True)
 
 
 class Tillage_til(BaseFileModel):
@@ -61,8 +62,9 @@ class Tillage_til(BaseFileModel):
 		else:
 			self.read_default_table(datasets_parmdb.Tillage_til, datasets_base.db, 0, ignore_id_col=True)
 
-	def write(self):
-		self.write_default_table(db.Tillage_til, True)
+	def write(self, database='project'):
+		table = project_parmdb.Tillage_til if database == 'project' else datasets_parmdb.Tillage_til
+		self.write_default_table(table, True)
 
 
 class Pesticide_pst(BaseFileModel):
@@ -77,8 +79,9 @@ class Pesticide_pst(BaseFileModel):
 		else:
 			self.read_default_table(datasets_parmdb.Pesticide_pst, datasets_base.db, 0, ignore_id_col=True)
 
-	def write(self):
-		self.write_default_table(db.Pesticide_pst, True)
+	def write(self, database='project'):
+		table = project_parmdb.Pesticide_pst if database == 'project' else datasets_parmdb.Pesticide_pst
+		self.write_default_table(table, True)
 
 
 class Urban_urb(BaseFileModel):
@@ -93,8 +96,9 @@ class Urban_urb(BaseFileModel):
 		else:
 			self.read_default_table(datasets_parmdb.Urban_urb, datasets_base.db, 0, ignore_id_col=True)
 
-	def write(self):
-		self.write_default_table(db.Urban_urb, True)
+	def write(self, database='project'):
+		table = project_parmdb.Urban_urb if database == 'project' else datasets_parmdb.Urban_urb
+		self.write_default_table(table, True)
 
 
 class Septic_sep(BaseFileModel):
@@ -157,8 +161,9 @@ class Snow_sno(BaseFileModel):
 		else:
 			self.read_default_table(datasets_parmdb.Snow_sno, datasets_base.db, 0, ignore_id_col=True)
 
-	def write(self):
-		self.write_default_table(db.Snow_sno, True)
+	def write(self, database='project'):
+		table = project_parmdb.Snow_sno if database == 'project' else datasets_parmdb.Snow_sno
+		self.write_default_table(table, True)
 		
 		
 class Pathogens_pth(BaseFileModel):

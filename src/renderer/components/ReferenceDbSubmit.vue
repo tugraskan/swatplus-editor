@@ -6,7 +6,7 @@
 	// authentication and the GitHub calls happen in the main process.
 	import { computed, reactive, ref, watch } from 'vue';
 	import { useHelpers } from '@/helpers';
-	import type { ReferenceDbPlan, ReferenceDbTable } from '@/typings';
+	import type { ReferenceDbPlan, ReferenceDbPullRequest, ReferenceDbTable } from '@/typings';
 
 	const { api, constants, currentProject, errors, utilities } = useHelpers();
 	const electron = window.electronApi;
@@ -74,13 +74,34 @@
 	// Blob sha each file was read at, so an upstream change made in between is
 	// caught rather than overwritten.
 	const fileShas = ref<Record<string, string>>({});
-	const result = ref<{ url: string, number: number, usedFork: boolean, fileCount: number } | null>(null);
+
+	interface PullRequestOutcome {
+		fileName: string;
+		ok: boolean;
+		data?: ReferenceDbPullRequest;
+		error?: string;
+	}
+	const results = ref<PullRequestOutcome[]>([]);
+	const submitProgress = ref('');
 
 	const selectedTable = computed(() => tables.value.find(t => t.key === picker.table) || null);
 	const canStage = computed(() => picker.table !== null && picker.recordIds.length > 0);
 	const canReview = computed(() => staged.value.length > 0);
 	const canSubmit = computed(() =>
 		auth.authenticated && plan.value !== null && plan.value.valid && !page.submitting);
+	const pullRequestCount = computed(() => plan.value ? plan.value.files.length : 0);
+
+	// Only tables with records the user has added or changed, unless the toggle
+	// is off or no default dataset is available to compare against.
+	const visibleTables = computed(() => {
+		if (!picker.onlyChanged || !hasDefaultDataset.value) return tables.value;
+		return tables.value.filter(t => (t.changed_count || 0) > 0);
+	});
+
+	const tableItems = computed(() => visibleTables.value.map(t => ({
+		...t,
+		displayLabel: t.changed_count !== undefined ? `${t.label} (${t.changed_count})` : t.label
+	})));
 
 	// Records already staged should not be offered again.
 	const availableRecords = computed(() => {
@@ -112,7 +133,7 @@
 	async function open() {
 		show.value = true;
 		step.value = 1;
-		result.value = null;
+		results.value = [];
 		plan.value = null;
 		staged.value = [];
 		picker.table = null;
@@ -131,7 +152,9 @@
 	async function loadTables() {
 		page.loading = true;
 		try {
-			const response = await api.get('reference-db/tables', currentProject.getApiHeader());
+			const useFilter = picker.onlyChanged && hasDefaultDataset.value;
+			const url = 'reference-db/tables' + (useFilter ? '?changed_only=true' : '');
+			const response = await api.get(url, currentProject.getApiHeader());
 			tables.value = response.data.tables;
 			unsupported.value = response.data.unsupported;
 		} catch (error) {
@@ -282,34 +305,47 @@
 		page.loading = false;
 	}
 
+	// Opens one pull request per file, so a reviewer for fertilizer.frt is not
+	// also asked to weigh in on an unrelated tillage.til change, and one file
+	// can be merged without waiting on another. Requests run one at a time,
+	// and every file is attempted even if an earlier one fails, so the result
+	// list always reflects what actually happened to each file.
 	async function submit() {
 		if (!canSubmit.value || plan.value === null) return;
 
 		page.submitting = true;
 		page.error = null;
+		results.value = [];
 
-		const response = await electron.referenceDbSubmit({
-			files: plan.value.files.map(f => ({
-				path: `database_files/${f.file_name}`,
-				contents: f.contents,
-				baseSha: fileShas.value[f.file_name]
-			})),
-			title: plan.value.title,
-			records: plan.value.items
-				.filter(i => i.operation !== 'unchanged' && i.valid)
-				.map(i => `${operationLabel(i.operation)}: \`${i.record_name}\` in \`${i.file_name}\``),
-			reason: details.reason,
-			source: details.source,
-			notes: details.notes,
-			editorVersion: constants.appSettings.version
-		});
+		for (const [index, file] of plan.value.files.entries()) {
+			submitProgress.value = `Opening pull request ${index + 1} of ${plan.value.files.length} (${file.file_name})...`;
 
-		if (response.ok && response.data) {
-			result.value = response.data;
-			step.value = 3;
-		} else {
-			page.error = response.error || 'Unable to open the pull request.';
+			const fileItems = plan.value.items.filter(i =>
+				i.file_name === file.file_name && i.operation !== 'unchanged' && i.valid);
+
+			const response = await electron.referenceDbSubmit({
+				files: [{
+					path: `database_files/${file.file_name}`,
+					contents: file.contents,
+					baseSha: fileShas.value[file.file_name]
+				}],
+				title: plan.value.file_titles[file.file_name] || plan.value.title,
+				records: fileItems.map(i => `${operationLabel(i.operation)}: \`${i.record_name}\``),
+				reason: details.reason,
+				source: details.source,
+				notes: details.notes,
+				editorVersion: constants.appSettings.version
+			});
+
+			if (response.ok && response.data) {
+				results.value.push({ fileName: file.file_name, ok: true, data: response.data });
+			} else {
+				results.value.push({ fileName: file.file_name, ok: false, error: response.error || 'Unable to open the pull request.' });
+			}
 		}
+
+		submitProgress.value = '';
+		step.value = 3;
 		page.submitting = false;
 	}
 
@@ -319,7 +355,15 @@
 	}
 
 	watch(() => picker.table, async () => await loadRecords());
-	watch(() => picker.onlyChanged, async () => await loadRecords());
+	watch(() => picker.onlyChanged, async () => {
+		// If the selected table drops out of view, clear it -- that alone
+		// triggers the watcher above, which clears the record list too.
+		if (picker.table !== null && !visibleTables.value.some(t => t.key === picker.table)) {
+			picker.table = null;
+		} else {
+			await loadRecords();
+		}
+	});
 
 	defineExpose({ open });
 </script>
@@ -407,15 +451,28 @@
 						</v-card-text>
 					</v-card>
 
-					<v-checkbox v-model="picker.onlyChanged" density="compact" hide-details class="mb-1"
-						:disabled="!hasDefaultDataset" :label="hasDefaultDataset
-							? 'Only show records I\'ve added or changed from the defaults'
-							: 'Only show changed records (no default dataset loaded for this project)'">
-					</v-checkbox>
+					<p class="text-medium-emphasis text-caption mb-2">
+						<template v-if="hasDefaultDataset">
+							Showing tables and records you've added or changed from the defaults.
+							<a href="#" class="text-primary" @click.prevent="picker.onlyChanged = !picker.onlyChanged">
+								{{ picker.onlyChanged ? 'Browse everything instead' : 'Show only what changed' }}
+							</a>
+						</template>
+						<template v-else>
+							Showing every table and record. No default dataset is loaded for this project, so
+							changes cannot be detected.
+						</template>
+					</p>
 
-					<div class="d-flex align-center ga-2 mb-1">
-						<v-select v-model="picker.table" :items="tables" item-title="label" item-value="key"
-							label="Database table" density="compact" hide-details style="max-width: 220px"></v-select>
+					<p v-if="picker.onlyChanged && hasDefaultDataset && visibleTables.length === 0"
+						class="text-medium-emphasis text-caption mb-3">
+						No tables have records that differ from the defaults yet.
+						<a href="#" class="text-primary" @click.prevent="picker.onlyChanged = false">Browse everything instead</a>.
+					</p>
+
+					<div v-else class="d-flex align-center ga-2 mb-1">
+						<v-select v-model="picker.table" :items="tableItems" item-title="displayLabel" item-value="key"
+							label="Database table" density="compact" hide-details style="max-width: 260px"></v-select>
 
 						<v-autocomplete v-model="picker.recordIds" :items="availableRecords" item-title="name" item-value="id"
 							label="Records" density="compact" hide-details multiple chips closable-chips
@@ -443,7 +500,8 @@
 
 					<p v-if="picker.table !== null && recordsAreFiltered && !page.loading && availableRecords.length === 0"
 						class="text-medium-emphasis text-caption mb-3">
-						No added or changed records found in this table. Uncheck the box above to see everything.
+						No added or changed records found in this table.
+						<a href="#" class="text-primary" @click.prevent="picker.onlyChanged = false">Browse everything instead</a>.
 					</p>
 
 					<v-table v-if="staged.length > 0" density="compact" class="mb-3 border rounded">
@@ -524,7 +582,12 @@
 
 					<v-alert v-if="plan.valid" type="success" variant="tonal" density="compact" class="mb-4">
 						These records pass the reference database's checks. They will be proposed as
-						<strong>{{ plan.title }}</strong>.
+						{{ pullRequestCount }} separate pull request<span v-if="pullRequestCount !== 1">s</span>, one per file:
+						<ul class="mt-1 mb-0">
+							<li v-for="file in plan.files" :key="file.file_name">
+								<strong>{{ plan.file_titles[file.file_name] }}</strong>
+							</li>
+						</ul>
 					</v-alert>
 
 					<p class="text-medium-emphasis mb-3">
@@ -536,18 +599,38 @@
 					<v-textarea v-model="details.notes" label="Notes" rows="2" density="compact"></v-textarea>
 				</div>
 
-				<!-- Step 3: the pull request is open -->
-				<div v-else-if="step === 3 && result !== null">
-					<v-alert type="success" variant="tonal" class="mb-4">
-						Pull request #{{ result.number }} is open on the reference database,
-						covering {{ result.fileCount }} file<span v-if="result.fileCount !== 1">s</span>.
+				<!-- Step 3: one outcome per file, since each was its own pull request -->
+				<div v-else-if="step === 3 && results.length > 0">
+					<v-alert v-if="results.every(r => r.ok)" type="success" variant="tonal" class="mb-4">
+						{{ results.length }} pull request<span v-if="results.length !== 1">s</span> opened on the reference database.
 					</v-alert>
-					<p class="mb-3">
-						<open-in-browser :url="result.url" :text="result.url" class="text-primary"></open-in-browser>
-					</p>
-					<p v-if="result.usedFork" class="text-medium-emphasis mb-0">
-						You do not have write access to the reference database, so the change was pushed to your own fork
-						and proposed from there. That is the normal path for a contribution.
+					<v-alert v-else-if="results.some(r => r.ok)" type="warning" variant="tonal" class="mb-4">
+						{{ results.filter(r => r.ok).length }} of {{ results.length }} pull requests opened.
+						See below for what failed.
+					</v-alert>
+					<v-alert v-else type="error" variant="tonal" class="mb-4">
+						None of the pull requests could be opened.
+					</v-alert>
+
+					<v-list density="compact" class="mb-3 border rounded">
+						<v-list-item v-for="outcome in results" :key="outcome.fileName">
+							<template #prepend>
+								<v-icon :class="outcome.ok ? 'text-success' : 'text-error'">
+									{{ outcome.ok ? 'fas fa-circle-check' : 'fas fa-circle-exclamation' }}
+								</v-icon>
+							</template>
+							<v-list-item-title><code>{{ outcome.fileName }}</code></v-list-item-title>
+							<v-list-item-subtitle v-if="outcome.ok && outcome.data">
+								<open-in-browser :url="outcome.data.url" :text="`Pull request #${outcome.data.number}`" class="text-primary"></open-in-browser>
+								<span v-if="outcome.data.usedFork" class="text-caption"> (via your fork)</span>
+							</v-list-item-subtitle>
+							<v-list-item-subtitle v-else class="text-error">{{ outcome.error }}</v-list-item-subtitle>
+						</v-list-item>
+					</v-list>
+
+					<p v-if="results.some(r => r.ok && r.data && r.data.usedFork)" class="text-medium-emphasis text-caption mb-0">
+						Pull requests marked "via your fork" were pushed there because you don't have write access to the
+						reference database directly. That is the normal path for a contribution.
 					</p>
 				</div>
 			</v-card-text>
@@ -556,6 +639,7 @@
 
 			<v-card-actions>
 				<v-btn v-if="step === 2" variant="text" @click="step = 1">Back</v-btn>
+				<p v-if="page.submitting && submitProgress" class="text-caption text-medium-emphasis mb-0 mx-2">{{ submitProgress }}</p>
 				<v-spacer></v-spacer>
 				<v-btn variant="text" @click="close">{{ step === 3 ? 'Close' : 'Cancel' }}</v-btn>
 				<v-btn v-if="step === 1" color="primary" variant="flat"
@@ -564,7 +648,7 @@
 				</v-btn>
 				<v-btn v-else-if="step === 2" color="primary" variant="flat"
 					:disabled="!canSubmit" :loading="page.submitting" @click="submit">
-					Open Pull Request
+					Open {{ pullRequestCount }} Pull Request<span v-if="pullRequestCount !== 1">s</span>
 				</v-btn>
 			</v-card-actions>
 		</v-card>

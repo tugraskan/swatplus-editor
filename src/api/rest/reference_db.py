@@ -12,16 +12,35 @@ bp = Blueprint('reference_db', __name__, url_prefix='/reference-db')
 
 @bp.route('/tables', methods=['GET'])
 def tables():
+	"""List submittable tables. Pass ?changed_only=true to also count, per
+	table, how many records differ from the bundled defaults."""
 	if request.method == 'GET':
+		changed_only = request.args.get('changed_only') == 'true'
+
+		table_list = [
+			{
+				'key': t.key,
+				'label': t.label,
+				'file_name': t.file_name,
+				'docs_path': t.docs_path
+			} for t in reference_submission.SUBMITTABLE_TABLES
+		]
+
+		if changed_only:
+			project_db = request.headers.get(rh.PROJECT_DB)
+			datasets_db = request.headers.get(rh.DATASETS_DB)
+			has_db,error = rh.init(project_db, datasets_db)
+			if not has_db: abort(400, error)
+			if not datasets_db:
+				rh.close()
+				abort(400, 'Filtering by changed records requires the default dataset to be available.')
+
+			for entry in table_list:
+				entry['changed_count'] = len(reference_submission.list_changed_records(entry['key']))
+			rh.close()
+
 		return jsonify({
-			'tables': [
-				{
-					'key': t.key,
-					'label': t.label,
-					'file_name': t.file_name,
-					'docs_path': t.docs_path
-				} for t in reference_submission.SUBMITTABLE_TABLES
-			],
+			'tables': table_list,
 			'unsupported': [
 				{'file_name': name, 'reason': reason}
 				for name, reason in reference_submission.UNSUPPORTED_TABLES.items()
@@ -86,6 +105,10 @@ def plan():
 
 		result = reference_submission.plan_submission(items, existing_files)
 		result['title'] = reference_submission.describe_submission(result['summary'], result['files'])
+		result['file_titles'] = {
+			file_name: reference_submission.describe_submission(file_summary, [{'file_name': file_name}])
+			for file_name, file_summary in result['per_file_summary'].items()
+		}
 		rh.close()
 
 		return jsonify(result)

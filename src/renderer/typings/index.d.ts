@@ -79,9 +79,10 @@ export interface ReferenceDbTable {
 	label: string;
 	file_name: string;
 	docs_path: string;
+	changed_count?: number;
 }
 
-/** One record in a planned submission, with what it would do upstream. */
+//One record in a planned submission, with what it would do upstream.
 export interface ReferenceDbPlanItem {
 	table: string;
 	label: string;
@@ -104,8 +105,10 @@ export interface ReferenceDbPlan {
 	files: { file_name: string, contents: string }[];
 	errors: string[];
 	summary: { added: number, updated: number, unchanged: number };
+	per_file_summary: Record<string, { added: number, updated: number }>;
 	valid: boolean;
 	title: string;
+	file_titles: Record<string, string>;
 }
 
 export interface ProjectSettings {

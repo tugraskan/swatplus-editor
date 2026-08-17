@@ -413,11 +413,22 @@ def plan_submission(items, existing_files):
 		'unchanged': sum(1 for r in results if r['operation'] == 'unchanged'),
 	}
 
+	# Same counts, broken out per file, so a title can be built for each file's
+	# own pull request instead of one title covering the whole batch.
+	per_file_summary = {}
+	for r in results:
+		if not r['valid'] or r['operation'] == 'unchanged':
+			continue
+		file_summary = per_file_summary.setdefault(r['file_name'], {'added': 0, 'updated': 0})
+		key = 'added' if r['operation'] == 'add' else 'updated'
+		file_summary[key] += 1
+
 	return {
 		'items': results,
 		'files': files,
 		'errors': submission_errors,
 		'summary': summary,
+		'per_file_summary': per_file_summary,
 		'valid': not submission_errors and all(r['valid'] for r in results) and len(files) > 0,
 	}
 

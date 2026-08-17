@@ -20,6 +20,8 @@ editor instead of as a red pull request.
 import os
 import tempfile
 
+from peewee import CharField, TextField, ForeignKeyField, BooleanField
+
 from database.project import hru_parm_db as project_parmdb
 from fileio import hru_parm_db as files_parmdb
 
@@ -32,6 +34,24 @@ class SubmittableTable:
 		self.model = model
 		self.file_model = file_model
 		self.docs_path = docs_path
+
+
+# Field types that hold text or a reference rather than a plain number --
+# e.g. plants.plt's plnt_typ/gro_trig, fertilizer.frt's pathogens. Everything
+# else is treated as numeric, since these tables are otherwise all DoubleField.
+_NON_NUMERIC_FIELD_TYPES = (CharField, TextField, ForeignKeyField, BooleanField)
+
+
+def _numeric_columns(table):
+	"""True/False per body column, aligned with a written row's columns (id
+	excluded, same as the writer), for whether that column's underlying field
+	is a plain number. The writer builds one column per non-id field in
+	table.model's declared order, so this lines up with it by construction."""
+	return [
+		not isinstance(field, _NON_NUMERIC_FIELD_TYPES)
+		for field in table.model._meta.sorted_fields
+		if field.name != 'id'
+	]
 
 
 # Tables the editor's database section exposes that the reference repository
@@ -142,6 +162,7 @@ def serialize_record(table_key, record_id):
 		'header_line': header_line,
 		'row_line': row_line,
 		'columns': header_line.split(),
+		'numeric_columns': _numeric_columns(table),
 	}
 
 
@@ -247,6 +268,7 @@ def _validate_row(serialized, upstream_columns=None):
 
 	name = serialized['record_name']
 	columns = serialized['columns']
+	numeric_columns = serialized.get('numeric_columns')
 	fields = serialized['row_line'].split()
 
 	if name is None or name.strip() == '' or name.strip().lower() == 'null':
@@ -266,6 +288,10 @@ def _validate_row(serialized, upstream_columns=None):
 		value = fields[index]
 		column_name = columns[index] if index < len(columns) else 'column {}'.format(index + 1)
 		if value.lower() == 'null':
+			continue
+		# A category or reference column (e.g. plants.plt's plnt_typ, fertilizer.frt's
+		# pathogens) is expected to hold text, not a number.
+		if numeric_columns is not None and index < len(numeric_columns) and not numeric_columns[index]:
 			continue
 		if not _is_number(value):
 			errors.append("Non-numeric value '{}' in column '{}'.".format(value, column_name))

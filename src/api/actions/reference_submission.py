@@ -23,7 +23,13 @@ import tempfile
 from peewee import CharField, TextField, ForeignKeyField, BooleanField
 
 from database.project import hru_parm_db as project_parmdb
+from database.project import ops as project_ops
+from database.project import structural as project_structural
+from database.project import lum as project_lum
 from fileio import hru_parm_db as files_parmdb
+from fileio import ops as files_ops
+from fileio import structural as files_structural
+from fileio import lum as files_lum
 
 
 class SubmittableTable:
@@ -70,6 +76,37 @@ SUBMITTABLE_TABLES = [
 					 project_parmdb.Urban_urb, files_parmdb.Urban_urb, 'databases/urban.urb'),
 	SubmittableTable('snow', 'Snow', 'snow.sno',
 					 project_parmdb.Snow_sno, files_parmdb.Snow_sno, 'databases/snow.sno'),
+
+	SubmittableTable('graze', 'Graze', 'graze.ops',
+					 project_ops.Graze_ops, files_ops.Graze_ops, 'management-practices/graze.ops'),
+	SubmittableTable('harvest', 'Harvest', 'harv.ops',
+					 project_ops.Harv_ops, files_ops.Harv_ops, 'management-practices/harv.ops'),
+	SubmittableTable('irrigation', 'Irrigation', 'irr.ops',
+					 project_ops.Irr_ops, files_ops.Irr_ops, 'management-practices/irr.ops'),
+	SubmittableTable('fire', 'Fire', 'fire.ops',
+					 project_ops.Fire_ops, files_ops.Fire_ops, 'management-practices/fire.ops'),
+	SubmittableTable('sweep', 'Sweep', 'sweep.ops',
+					 project_ops.Sweep_ops, files_ops.Sweep_ops, 'management-practices/sweep.ops'),
+	SubmittableTable('chem_app', 'Chemical Applications', 'chem_app.ops',
+					 project_ops.Chem_app_ops, files_ops.Chem_app_ops, 'management-practices/chem_app.ops'),
+
+	SubmittableTable('septic_str', 'Septic Systems', 'septic.str',
+					 project_structural.Septic_str, files_structural.Septic_str, 'structural-practices/septic.str'),
+	SubmittableTable('bmpuser', 'User Best Management Practices', 'bmpuser.str',
+					 project_structural.Bmpuser_str, files_structural.Bmpuser_str, 'structural-practices/bmpuser.str'),
+	SubmittableTable('filterstrip', 'Filter Strips', 'filterstrip.str',
+					 project_structural.Filterstrip_str, files_structural.Filterstrip_str, 'structural-practices/filterstrip.str'),
+	SubmittableTable('grassedww', 'Grassed Waterways', 'grassedww.str',
+					 project_structural.Grassedww_str, files_structural.Grassedww_str, 'structural-practices/grassedww.str'),
+	SubmittableTable('tiledrain', 'Tile Drains', 'tiledrain.str',
+					 project_structural.Tiledrain_str, files_structural.Tiledrain_str, 'structural-practices/tiledrain.str'),
+
+	SubmittableTable('cntable', 'Curve Numbers', 'cntable.lum',
+					 project_lum.Cntable_lum, files_lum.Cntable_lum, 'landuse-and-management/cntable.lum'),
+	SubmittableTable('ovn_table', "Manning's n Tables", 'ovn_table.lum',
+					 project_lum.Ovn_table_lum, files_lum.Ovn_table_lum, 'landuse-and-management/ovn_table.lum'),
+	SubmittableTable('cons_practice', 'Conservation Practices', 'cons_practice.lum',
+					 project_lum.Cons_prac_lum, files_lum.Cons_prac_lum, 'landuse-and-management/cons_practice.lum'),
 ]
 
 # Reported to the user so an absent table reads as a known limitation rather

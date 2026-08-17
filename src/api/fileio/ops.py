@@ -55,9 +55,9 @@ class Graze_ops(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Graze_ops, data)
 
-	def write(self):
-		table = db.Graze_ops
-		order_by = db.Graze_ops.id
+	def write(self, database='project'):
+		table = db.Graze_ops if database == 'project' else db_datasets.Graze_ops
+		order_by = table.id
 
 		if table.select().count() > 0:
 			with open(self.file_name, 'w') as file:
@@ -119,8 +119,9 @@ class Harv_ops(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Harv_ops, data)
 
-	def write(self):
-		self.write_default_table(db.Harv_ops, True)
+	def write(self, database='project'):
+		table = db.Harv_ops if database == 'project' else db_datasets.Harv_ops
+		self.write_default_table(table, True)
 
 
 class Irr_ops(BaseFileModel):
@@ -135,8 +136,9 @@ class Irr_ops(BaseFileModel):
 		else:
 			self.read_default_table(db_datasets.Irr_ops, datasets_base.db, 0, ignore_id_col=True)
 
-	def write(self):
-		self.write_default_table(db.Irr_ops, True)
+	def write(self, database='project'):
+		table = db.Irr_ops if database == 'project' else db_datasets.Irr_ops
+		self.write_default_table(table, True)
 
 
 class Fire_ops(BaseFileModel):
@@ -173,8 +175,9 @@ class Fire_ops(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Fire_ops, data)
 
-	def write(self):
-		self.write_default_table(db.Fire_ops, True)
+	def write(self, database='project'):
+		table = db.Fire_ops if database == 'project' else db_datasets.Fire_ops
+		self.write_default_table(table, True)
 
 
 class Sweep_ops(BaseFileModel):
@@ -211,8 +214,9 @@ class Sweep_ops(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Sweep_ops, data)
 
-	def write(self):
-		self.write_default_table(db.Sweep_ops, True)
+	def write(self, database='project'):
+		table = db.Sweep_ops if database == 'project' else db_datasets.Sweep_ops
+		self.write_default_table(table, True)
 
 
 class Chem_app_ops(BaseFileModel):
@@ -255,5 +259,6 @@ class Chem_app_ops(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Chem_app_ops, data)
 
-	def write(self):
-		self.write_default_table(db.Chem_app_ops, True)
+	def write(self, database='project'):
+		table = db.Chem_app_ops if database == 'project' else db_datasets.Chem_app_ops
+		self.write_default_table(table, True)

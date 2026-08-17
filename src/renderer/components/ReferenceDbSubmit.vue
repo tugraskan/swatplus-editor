@@ -1,19 +1,9 @@
 <script setup lang="ts">
-	/**
-	 * Propose records from the current project for inclusion in the SWAT+
-	 * authoritative reference database, as a single pull request.
-	 *
-	 * Records are staged into a basket first, so one submission can carry
-	 * several records across several files. Each staged record is classified
-	 * against the reference database as it currently stands -- a name that is
-	 * not there yet is an addition, a name that is there with different values
-	 * is an update, and a name that already matches is dropped.
-	 *
-	 * Rows are formatted by the editor's own file writers (via the API), so the
-	 * pull request reads as one added or changed line per record.
-	 * Authentication and the GitHub calls happen in the main process; no token
-	 * is handled here.
-	 */
+	// Propose records from this project for the SWAT+ reference database as one pull
+	// request. Records are staged first so a submission can span several files, and
+	// each is classified against the reference database as an add, update or
+	// unchanged. Rows are formatted by the editor's own writers via the API;
+	// authentication and the GitHub calls happen in the main process.
 	import { computed, reactive, ref, watch } from 'vue';
 	import { useHelpers } from '@/helpers';
 	import type { ReferenceDbPlan, ReferenceDbTable } from '@/typings';
@@ -65,10 +55,8 @@
 	const unsupported = ref<{ file_name: string, reason: string }[]>([]);
 	const records = ref<{ id: number, name: string, operation?: 'add' | 'update' }[]>([]);
 
-	/** Whether the last successful load actually applied the changed-only
-	 *  filter -- kept separate from the toggle itself so a load that fell back
-	 *  to the full list (e.g. no default dataset available) doesn't silently
-	 *  claim to be filtered. */
+	// Whether the last load actually applied the filter, kept separate from the
+	// toggle so a fallback to the full list is not reported as filtered.
 	const recordsAreFiltered = ref(false);
 
 	const picker = reactive({
@@ -83,8 +71,8 @@
 	const details = reactive({ reason: '', source: '', notes: '' });
 
 	const plan = ref<ReferenceDbPlan | null>(null);
-	/** Blob sha each file was read at, carried into the submission so an
-	 *  upstream change made in between is caught rather than overwritten. */
+	// Blob sha each file was read at, so an upstream change made in between is
+	// caught rather than overwritten.
 	const fileShas = ref<Record<string, string>>({});
 	const result = ref<{ url: string, number: number, usedFork: boolean, fileCount: number } | null>(null);
 
@@ -94,7 +82,7 @@
 	const canSubmit = computed(() =>
 		auth.authenticated && plan.value !== null && plan.value.valid && !page.submitting);
 
-	/** Records already staged should not be offered again. */
+	// Records already staged should not be offered again.
 	const availableRecords = computed(() => {
 		const taken = new Set(staged.value.filter(s => s.table === picker.table).map(s => s.id));
 		return records.value.filter(r => !taken.has(r.id));
@@ -102,7 +90,10 @@
 
 	const stagedByFile = computed(() => {
 		const groups: Record<string, StagedRecord[]> = {};
-		for (const record of staged.value) (groups[record.fileName] ??= []).push(record);
+		for (const record of staged.value) {
+			if (groups[record.fileName] === undefined) groups[record.fileName] = [];
+			groups[record.fileName].push(record);
+		}
 		return groups;
 	});
 
@@ -155,12 +146,12 @@
 		const response = await electron.referenceDbAuthStatus();
 		if (response.ok && response.data) {
 			auth.authenticated = response.data.authenticated;
-			auth.login = response.data.login ?? '';
+			auth.login = response.data.login || '';
 			auth.deviceFlowAvailable = response.data.deviceFlowAvailable;
 			auth.encryptionAvailable = response.data.encryptionAvailable;
-			auth.tokenInPlaintext = response.data.tokenInPlaintext ?? false;
+			auth.tokenInPlaintext = response.data.tokenInPlaintext || false;
 		} else {
-			auth.error = response.error ?? 'Unable to check GitHub sign-in status.';
+			auth.error = response.error || 'Unable to check GitHub sign-in status.';
 		}
 		auth.checking = false;
 	}
@@ -175,7 +166,7 @@
 			auth.login = response.data.login;
 			auth.tokenInPlaintext = response.data.tokenInPlaintext;
 		} else {
-			auth.error = response.error ?? 'Sign-in failed.';
+			auth.error = response.error || 'Sign-in failed.';
 		}
 		auth.checking = false;
 	}
@@ -184,7 +175,7 @@
 		auth.error = null;
 		const started = await electron.referenceDbDeviceStart();
 		if (!started.ok || !started.data) {
-			auth.error = started.error ?? 'Unable to start GitHub sign-in.';
+			auth.error = started.error || 'Unable to start GitHub sign-in.';
 			return;
 		}
 
@@ -204,7 +195,7 @@
 			auth.login = finished.data.login;
 			auth.tokenInPlaintext = finished.data.tokenInPlaintext;
 		} else {
-			auth.error = finished.error ?? 'Sign-in failed.';
+			auth.error = finished.error || 'Sign-in failed.';
 		}
 	}
 
@@ -255,12 +246,9 @@
 		plan.value = null;
 	}
 
-	/**
-	 * Read every affected file as it currently stands upstream, then have the
-	 * API work out what each staged record would do to it. Doing it in this
-	 * order is what lets updates, no-op records and column drift be identified
-	 * before anything is pushed to GitHub.
-	 */
+	// Read each affected file as it stands upstream, then have the API work out what
+	// the staged records would do to it, so updates, no-op records and column drift
+	// are identified before anything is pushed to GitHub.
 	async function buildPlan() {
 		if (!canReview.value) return;
 
@@ -273,7 +261,7 @@
 		for (const fileName of Object.keys(stagedByFile.value)) {
 			const file = await electron.referenceDbGetFile(`database_files/${fileName}`);
 			if (!file.ok || !file.data) {
-				page.error = file.error ?? `Unable to read ${fileName} from the reference database.`;
+				page.error = file.error || `Unable to read ${fileName} from the reference database.`;
 				page.loading = false;
 				return;
 			}
@@ -320,7 +308,7 @@
 			result.value = response.data;
 			step.value = 3;
 		} else {
-			page.error = response.error ?? 'Unable to open the pull request.';
+			page.error = response.error || 'Unable to open the pull request.';
 		}
 		page.submitting = false;
 	}
@@ -354,7 +342,7 @@
 					<p class="text-medium-emphasis mb-4">
 						Propose records from this project for inclusion in the
 						<open-in-browser :url="repoUrl" :text="`${repo.owner}/${repo.repo}`" class="text-primary"></open-in-browser>
-						reference database. Add as many as you like, from as many tables as you like -- they go out together as
+						reference database. Add as many as you like, from as many tables as you like. They go out together as
 						one pull request. A reviewer there decides whether to merge it.
 					</p>
 
@@ -422,7 +410,7 @@
 					<v-checkbox v-model="picker.onlyChanged" density="compact" hide-details class="mb-1"
 						:disabled="!hasDefaultDataset" :label="hasDefaultDataset
 							? 'Only show records I\'ve added or changed from the defaults'
-							: 'Only show changed records (unavailable -- no default dataset loaded for this project)'">
+							: 'Only show changed records (no default dataset loaded for this project)'">
 					</v-checkbox>
 
 					<div class="d-flex align-center ga-2 mb-1">

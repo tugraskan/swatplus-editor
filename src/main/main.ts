@@ -487,12 +487,9 @@ ipcMain.on('open-url', (event, url) => {
 	shell.openExternal(url);
 })
 
-/*
- * Contributing a database record to the SWAT+ authoritative reference
- * database. These are invoke/handle rather than send/sendSync because they do
- * network work; the access token stays here in the main process and is never
- * returned to the renderer.
- */
+//Contributing database records to the SWAT+ reference database. These use
+//invoke/handle rather than send/sendSync because they do network work; the
+//access token stays in the main process and is never returned to the renderer.
 const github = new GitHubClient(store, appsettings.referenceDb);
 
 const githubResult = async (work: () => Promise<any>) => {

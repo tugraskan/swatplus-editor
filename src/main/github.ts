@@ -1,19 +1,8 @@
-/**
- * GitHub authentication and pull-request submission for contributing records
- * to the SWAT+ authoritative reference database.
- *
- * This all lives in the main process on purpose: the access token is written
- * to disk encrypted with Electron's safeStorage and is never handed to the
- * renderer. The renderer asks for an auth status or a submission and gets back
- * a result, never a credential.
- *
- * Two ways to sign in are supported:
- *   - Device flow, when an OAuth app client id is configured in
- *     appsettings.json. This is the friendlier path: the user gets a short
- *     code to enter in their browser and never handles a token.
- *   - A personal access token the user pastes in. This needs no OAuth app
- *     registration, so it works in a stock build.
- */
+//GitHub authentication and pull-request submission for contributing records to
+//the SWAT+ authoritative reference database. This lives in the main process so
+//the access token, stored encrypted with safeStorage, is never handed to the
+//renderer. Sign-in is by device flow when an OAuth app client id is configured
+//in appsettings.json, or by a personal access token, which needs no OAuth app.
 
 import { safeStorage } from 'electron';
 import Store from 'electron-store';
@@ -40,16 +29,16 @@ export const DEFAULT_CONFIG: ReferenceDbConfig = {
 export interface SubmissionFile {
 	path: string;
 	contents: string;
-	/** Blob sha the contents were built from, so a change made upstream in the
-	 *  meantime is caught instead of being overwritten. */
+	//Blob sha the contents were built from, so a change made upstream in the
+	//meantime is caught instead of being overwritten.
 	baseSha?: string;
 }
 
 export interface SubmissionRequest {
 	files: SubmissionFile[];
-	/** Commit message and pull-request title, built by the API from the plan. */
+	//Commit message and pull-request title, built by the API from the plan.
 	title: string;
-	/** Human-readable record list for the pull-request body. */
+	//Human-readable record list for the pull-request body.
 	records?: string[];
 	reason?: string;
 	source?: string;
@@ -74,17 +63,17 @@ export class GitHubClient {
 		return this.config;
 	}
 
-	/* ---------------------------------------------------------------- token */
+	//Token storage
 
 	private saveToken(token: string, method: string) {
 		if (safeStorage.isEncryptionAvailable()) {
 			this.store.set(TOKEN_KEY, safeStorage.encryptString(token).toString('base64'));
 			this.store.set(TOKEN_PLAINTEXT_KEY, false);
 		} else {
-			// No OS keyring (common on a bare Linux desktop). Storing the token
-			// unencrypted is the only way to offer "stay signed in" here, so it
-			// is recorded as such and surfaced to the user rather than done
-			// quietly.
+			//No OS keyring (common on a bare Linux desktop). Storing the token
+			//unencrypted is the only way to offer "stay signed in" here, so it
+			//is recorded as such and surfaced to the user rather than done
+			//quietly.
 			this.store.set(TOKEN_KEY, token);
 			this.store.set(TOKEN_PLAINTEXT_KEY, true);
 		}
@@ -100,8 +89,8 @@ export class GitHubClient {
 		try {
 			return safeStorage.decryptString(Buffer.from(stored, 'base64'));
 		} catch {
-			// Encrypted with a key we no longer have (different machine or OS
-			// user). Drop it so the user is asked to sign in again.
+			//Encrypted with a key we no longer have (different machine or OS
+			//user). Drop it so the user is asked to sign in again.
 			this.signOut();
 			return null;
 		}
@@ -117,7 +106,7 @@ export class GitHubClient {
 		return this.store.get(TOKEN_PLAINTEXT_KEY) === true;
 	}
 
-	/* ------------------------------------------------------------ transport */
+	//Transport
 
 	private async request(method: string, path: string, body?: any, token?: string) {
 		const authToken = token !== undefined ? token : this.readToken();
@@ -153,7 +142,7 @@ export class GitHubClient {
 		return parsed;
 	}
 
-	/* ----------------------------------------------------------------- auth */
+	//Auth
 
 	async getAuthStatus() {
 		const token = this.readToken();
@@ -176,7 +165,7 @@ export class GitHubClient {
 				encryptionAvailable: safeStorage.isEncryptionAvailable()
 			};
 		} catch {
-			// Token revoked or expired.
+			//Token revoked or expired.
 			this.signOut();
 			return {
 				authenticated: false,
@@ -186,7 +175,7 @@ export class GitHubClient {
 		}
 	}
 
-	/** Validate and store a personal access token. */
+	//Validate and store a personal access token.
 	async signInWithToken(token: string) {
 		const trimmed = (token || '').trim();
 		if (!trimmed) throw new Error('Enter a personal access token.');
@@ -196,7 +185,7 @@ export class GitHubClient {
 		return { login: user.login, tokenInPlaintext: this.isTokenStoredInPlaintext() };
 	}
 
-	/** Step one of the device flow: ask GitHub for a user code. */
+	//Step one of the device flow: ask GitHub for a user code.
 	async startDeviceFlow() {
 		if (!this.config.oauthClientId) {
 			throw new Error('No GitHub OAuth app is configured for this build, so browser sign-in is unavailable. Use a personal access token instead.');
@@ -219,10 +208,8 @@ export class GitHubClient {
 		};
 	}
 
-	/**
-	 * Step two: poll until the user approves in the browser. Resolves with the
-	 * signed-in login, or throws if they deny or the code expires.
-	 */
+	//Step two: poll until the user approves in the browser. Resolves with the
+	//signed-in login, or throws if they deny or the code expires.
 	async pollDeviceFlow(deviceCode: string, intervalSeconds: number, expiresInSeconds: number) {
 		let interval = (intervalSeconds || 5) * 1000;
 		const deadline = Date.now() + (expiresInSeconds || 900) * 1000;
@@ -258,9 +245,9 @@ export class GitHubClient {
 		throw new Error('Sign-in timed out. Start again to get a new code.');
 	}
 
-	/* ----------------------------------------------------------- repo access */
+	//Repository access
 
-	/** Current text of a file on the reference database's default branch. */
+	//Current text of a file on the reference database's default branch.
 	async getFile(filePath: string) {
 		const { owner, repo, branch } = this.config;
 		const data = await this.request(
@@ -271,11 +258,9 @@ export class GitHubClient {
 		};
 	}
 
-	/**
-	 * Resolve where the branch should live. A user with push access to the
-	 * reference database branches on it directly; everyone else gets a fork,
-	 * created and brought up to date with upstream if needed.
-	 */
+	//Resolve where the branch should live. A user with push access branches on the
+	//reference database directly; everyone else gets a fork, created and brought up
+	//to date with upstream if needed.
 	private async resolveHeadRepo(login: string) {
 		const { owner, repo } = this.config;
 
@@ -290,7 +275,7 @@ export class GitHubClient {
 			if (e.status !== 404) throw e;
 			await this.request('POST', `/repos/${owner}/${repo}/forks`);
 
-			// Forking is asynchronous; wait for the repo to become readable.
+			//Forking is asynchronous; wait for the repo to become readable.
 			let ready = false;
 			for (let attempt = 0; attempt < 15 && !ready; attempt++) {
 				await delay(2000);
@@ -304,9 +289,8 @@ export class GitHubClient {
 			if (!ready) throw new Error('Timed out waiting for your fork of the reference database to be created.');
 		}
 
-		// An existing fork may be behind upstream. Failing to sync is not fatal
-		// -- it only matters if the target file changed -- so it is not fatal
-		// here either.
+		//An existing fork may be behind upstream. Failing to sync only matters if the
+		//target file changed, so it is not treated as fatal.
 		try {
 			await this.request('POST', `/repos/${login}/${repo}/merge-upstream`, { branch: this.config.branch });
 		} catch { /* fork may already be current, or have diverged */ }
@@ -346,13 +330,9 @@ export class GitHubClient {
 		return lines.join('\n');
 	}
 
-	/**
-	 * Commit every changed file in one commit and open the pull request.
-	 *
-	 * This goes through the git data API rather than the contents API because
-	 * the contents API writes one file per commit; a submission may span
-	 * several files and belongs in the history as a single change.
-	 */
+	//Commit every changed file in one commit and open the pull request. This uses
+	//the git data API rather than the contents API because the contents API writes
+	//one file per commit, and a submission may span several files.
 	async submitRecords(request: SubmissionRequest) {
 		const token = this.readToken();
 		if (!token) throw new Error('Sign in to GitHub before submitting.');
@@ -376,10 +356,10 @@ export class GitHubClient {
 			sha: baseSha
 		});
 
-		// Each file's contents were assembled from the version read when the
-		// submission was reviewed. If any has moved since, the assembled text no
-		// longer contains whatever changed, and committing it would quietly
-		// revert that change.
+		//Each file's contents were assembled from the version read when the
+		//submission was reviewed. If any has moved since, the assembled text no
+		//longer contains whatever changed, and committing it would quietly
+		//revert that change.
 		for (const file of request.files) {
 			if (!file.baseSha) continue;
 			const current = await this.request(

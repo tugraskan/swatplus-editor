@@ -1,7 +1,6 @@
-"""Endpoints backing the "contribute a record to the reference database"
-workflow. These only prepare and check the text of a submission -- the GitHub
-side of it happens in the main process, so no credential ever reaches the API.
-"""
+# Endpoints backing the contribute-to-reference-database workflow. These only
+# prepare and check the text of a submission; the GitHub side happens in the main
+# process, so no credential reaches the API.
 
 from flask import Blueprint, request, abort, jsonify
 from .config import RequestHeaders as rh
@@ -34,14 +33,11 @@ def tables():
 
 @bp.route('/records/<table_key>', methods=['GET'])
 def records(table_key):
-	"""List records in a table. Pass ?changed_only=true to list only records
-	that differ from -- or don't exist in -- the editor's bundled default
-	dataset, so the picker can default to "what did I actually touch" instead
-	of every record in the table."""
+	"""List records in a table, or only those changed from the bundled defaults."""
 	if request.method == 'GET':
 		project_db = request.headers.get(rh.PROJECT_DB)
 		datasets_db = request.headers.get(rh.DATASETS_DB)
-		has_db, error = rh.init(project_db, datasets_db)
+		has_db,error = rh.init(project_db, datasets_db)
 		if not has_db: abort(400, error)
 
 		try:
@@ -71,11 +67,10 @@ def records(table_key):
 
 @bp.route('/plan', methods=['POST'])
 def plan():
-	"""Work out what a batch of chosen records would change, given the current
-	contents of each affected file upstream."""
+	"""Work out what a batch of records would change, given each file's contents."""
 	if request.method == 'POST':
 		project_db = request.headers.get(rh.PROJECT_DB)
-		has_db, error = rh.init(project_db)
+		has_db,error = rh.init(project_db)
 		if not has_db: abort(400, error)
 
 		args = request.get_json(silent=True) or {}

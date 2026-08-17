@@ -1,21 +1,9 @@
-"""Serialize a single project database record into the exact SWAT+ text form
-used by the authoritative reference database repository, and check it against
-the same rules that repository's CI enforces.
-
-The reference repository's files are produced by this editor's own writers --
-every file there carries a "written by SWAT+ editor" header line. So rather
-than reformat a row by hand, this module runs the real writer over the table,
-into a temporary file, and lifts out the header and the one line belonging to
-the record being submitted. That keeps a submitted line byte-identical to the
-line the same record would occupy had the whole file been regenerated, which
-is what keeps the resulting pull request a one-line diff.
-
-The validation here deliberately mirrors the reference repository's
-validate_database_files.py (field counts, numeric columns, blank/'null' record
-names, duplicate names, column-header drift). It is a pre-flight check, not a
-replacement: catching these locally means a contributor sees the problem in the
-editor instead of as a red pull request.
-"""
+# Serializes a project database record into the SWAT+ text form used by the
+# authoritative reference database, and checks it before submission.
+# The reference files are written by this editor's own writers, so a record is
+# formatted by running the real writer over the table and lifting out its line.
+# Validation mirrors the reference repository's validate_database_files.py so a
+# contributor sees a problem here rather than as a failed pull request.
 
 import os
 import tempfile
@@ -42,17 +30,13 @@ class SubmittableTable:
 		self.docs_path = docs_path
 
 
-# Field types that hold text or a reference rather than a plain number --
-# e.g. plants.plt's plnt_typ/gro_trig, fertilizer.frt's pathogens. Everything
-# else is treated as numeric, since these tables are otherwise all DoubleField.
+# Field types holding text or a reference rather than a number, e.g. plants.plt
+# plnt_typ/gro_trig and fertilizer.frt pathogens. Everything else is numeric.
 _NON_NUMERIC_FIELD_TYPES = (CharField, TextField, ForeignKeyField, BooleanField)
 
 
 def _numeric_columns(table):
-	"""True/False per body column, aligned with a written row's columns (id
-	excluded, same as the writer), for whether that column's underlying field
-	is a plain number. The writer builds one column per non-id field in
-	table.model's declared order, so this lines up with it by construction."""
+	"""Flag per written column (id excluded) for whether its field is numeric."""
 	return [
 		not isinstance(field, _NON_NUMERIC_FIELD_TYPES)
 		for field in table.model._meta.sorted_fields
@@ -60,9 +44,8 @@ def _numeric_columns(table):
 	]
 
 
-# Tables the editor's database section exposes that the reference repository
-# also maintains text for. septic.sep is deliberately absent -- see
-# UNSUPPORTED_TABLES below.
+# Tables the editor manages that the reference database also maintains text for.
+# See UNSUPPORTED_TABLES for the ones deliberately left out.
 SUBMITTABLE_TABLES = [
 	SubmittableTable('plants', 'Plants', 'plants.plt',
 					 project_parmdb.Plants_plt, files_parmdb.Plants_plt, 'databases/plants.plt'),
@@ -109,11 +92,9 @@ SUBMITTABLE_TABLES = [
 					 project_lum.Cons_prac_lum, files_lum.Cons_prac_lum, 'landuse-and-management/cons_practice.lum'),
 ]
 
-# Reported to the user so an absent table reads as a known limitation rather
-# than an oversight. Both entries match EXCLUDED_TABLES in the reference
-# repository's internal/scripts/patch_editor_dataset.py: a record submitted for
-# either one could never be synced back into the editor's dataset, because the
-# editor's own reader for it is broken.
+# Shown to the user so a missing table reads as a known limitation. The first two
+# match EXCLUDED_TABLES in the reference repository's patch_editor_dataset.py; a
+# record submitted for either could not be read back into the editor's dataset.
 UNSUPPORTED_TABLES = {
 	'septic.sep': (
 		"The editor's Septic_sep.read() expects 13 whitespace-delimited columns "
@@ -143,12 +124,11 @@ def get_table(key):
 
 
 def _write_table_to_text(table, database='project'):
-	"""Run the editor's own writer for this table into a temp file and return
-	its lines. Uses write() so every per-file quirk the writer applies --
-	description formatting, precision and padding overrides, row ordering --
-	is applied exactly as it would be for a real file write. `database` selects
-	the project's own table or the editor's bundled default dataset -- both are
-	written by the identical code path, so a row from either is comparable."""
+	"""
+		Write this table to a temp file using the editor's own writer and return its lines.
+		:param database: project or datasets
+		:return: list of lines
+		"""
 	handle, path = tempfile.mkstemp(suffix='-' + table.file_name)
 	os.close(handle)
 	try:
@@ -161,8 +141,7 @@ def _write_table_to_text(table, database='project'):
 
 
 def serialize_record(table_key, record_id):
-	"""Return the metadata line, column header line, and the single formatted
-	text line for one record, exactly as the reference repository stores it."""
+	"""Return the meta line, header line and formatted text line for one record."""
 	table = get_table(table_key)
 
 	record = table.model.get_or_none(table.model.id == record_id)
@@ -203,8 +182,6 @@ def serialize_record(table_key, record_id):
 	}
 
 
-
-
 def _is_number(value):
 	try:
 		float(value)
@@ -239,19 +216,14 @@ def _rows_from_lines(lines):
 
 
 def list_changed_records(table_key):
-	"""Records in the project whose formatted row differs from -- or has no
-	counterpart in -- the editor's own bundled default dataset for this table.
-	A heuristic for "records the user likely added or changed themselves",
-	meant to narrow the record picker instead of listing every record in the
-	table (most of which, in most projects, are untouched stock defaults).
-
-	This compares against the *local* default dataset shipped with this copy
-	of the editor, not the reference database on GitHub -- the two can differ
-	if the reference database has moved on since this dataset was built. That
-	makes it a good proxy for "did I touch this", but not a substitute for the
-	real check against GitHub, which still happens when a record is reviewed
-	for submission.
 	"""
+		Records whose row differs from, or is missing from, the bundled default dataset.
+		Narrows the record picker to what the user likely added or changed. Compares
+		against the local default dataset, not the reference database on GitHub, so it
+		is a proxy only; the real check happens when a record is reviewed.
+		:param table_key: key of a submittable table
+		:return: list of {id, name, operation}
+		"""
 	table = get_table(table_key)
 
 	project_rows = _rows_from_lines(_write_table_to_text(table, database='project'))
@@ -261,8 +233,7 @@ def list_changed_records(table_key):
 	for record in table.model.select(table.model.id, table.model.name).order_by(table.model.name):
 		project_row = project_rows.get(record.name)
 		if project_row is None:
-			# The writer skipped or renamed this record on the way out (e.g. a
-			# blank name); nothing to compare it against.
+			# The writer skipped or renamed this record (e.g. a blank name).
 			continue
 
 		default_row = default_rows.get(record.name)
@@ -271,7 +242,7 @@ def list_changed_records(table_key):
 		elif default_row.rstrip() != project_row.rstrip():
 			operation = 'update'
 		else:
-			continue  # matches the shipped default untouched -- not a change
+			continue  # untouched shipped default
 
 		changed.append({'id': record.id, 'name': record.name, 'operation': operation})
 
@@ -279,10 +250,9 @@ def list_changed_records(table_key):
 
 
 def _apply_rows(text, replacements, additions):
-	"""Rewrite a file with some rows replaced in place and others appended.
+	"""Rewrite a file, replacing rows in place and appending the rest.
 
-	Replacing in place rather than removing and re-appending is what keeps an
-	update to an existing record a one-line diff instead of a two-line move.
+	Replacing in place keeps an update to an existing record a one-line diff.
 	"""
 	lines = text.splitlines()
 	out = []
@@ -298,8 +268,7 @@ def _apply_rows(text, replacements, additions):
 
 
 def _validate_row(serialized, upstream_columns=None):
-	"""Check one formatted row. Whether the record already exists upstream is
-	decided by the caller -- an existing name is an update here, not an error."""
+	"""Check one formatted row. An existing upstream name is an update, not an error."""
 	errors = []
 	warnings = []
 
@@ -314,8 +283,7 @@ def _validate_row(serialized, upstream_columns=None):
 	if name is not None and any(character.isspace() for character in name):
 		errors.append('Record name "{}" contains whitespace, which would split into extra columns.'.format(name))
 
-	# The trailing description column is free text that may contain spaces or be
-	# absent entirely, so it is excluded from strict field counting.
+	# The trailing description is free text and may contain spaces or be absent.
 	required_field_count = max(len(columns) - 1, 1)
 	if len(fields) < required_field_count:
 		errors.append('Row has {} fields but {} expects at least {}.'.format(
@@ -326,8 +294,7 @@ def _validate_row(serialized, upstream_columns=None):
 		column_name = columns[index] if index < len(columns) else 'column {}'.format(index + 1)
 		if value.lower() == 'null':
 			continue
-		# A category or reference column (e.g. plants.plt's plnt_typ, fertilizer.frt's
-		# pathogens) is expected to hold text, not a number.
+		# A category or reference column is expected to hold text, not a number.
 		if numeric_columns is not None and index < len(numeric_columns) and not numeric_columns[index]:
 			continue
 		if not _is_number(value):
@@ -348,14 +315,14 @@ def _validate_row(serialized, upstream_columns=None):
 
 
 def plan_submission(items, existing_files):
-	"""Work out what a batch of records would do to the reference database.
-
-	`items` is a list of {'table': key, 'id': record id}; `existing_files` maps
-	a file name to its current contents upstream. Each record is classified as
-	an addition, an update, or unchanged, and the resulting contents are built
-	per file so that one pull request can carry several records across several
-	files.
 	"""
+		Work out what a batch of records would change in the reference database.
+		Each record is classified as an addition, an update or unchanged, and the new
+		contents are built per file so one pull request can span several files.
+		:param items: list of {'table': key, 'id': record id}
+		:param existing_files: file name to its current contents upstream
+		:return: dict of items, files, errors, summary and valid
+		"""
 	results = []
 	submission_errors = []
 	upstream_rows = {name: _record_rows(text) for name, text in existing_files.items()}
@@ -438,7 +405,7 @@ def plan_submission(items, existing_files):
 	if not items:
 		submission_errors.append('Choose at least one record to submit.')
 	elif not files and not submission_errors and all(r['valid'] for r in results):
-		submission_errors.append('Nothing to submit -- every record chosen already matches the reference database.')
+		submission_errors.append('Nothing to submit. Every record chosen already matches the reference database.')
 
 	summary = {
 		'added': sum(1 for r in results if r['operation'] == 'add' and r['valid']),

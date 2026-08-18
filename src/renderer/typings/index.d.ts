@@ -12,6 +12,103 @@ export interface ElectronAppSettings {
 	swatplus: string;
 	python: boolean;
 	pythonPath: string;
+	referenceDb?: {
+		owner: string;
+		repo: string;
+		branch: string;
+		oauthClientId: string;
+	};
+}
+
+export interface ReferenceDbConfig {
+	owner: string;
+	repo: string;
+	branch: string;
+}
+
+/** Main-process calls report failure in the payload rather than throwing across IPC. */
+export interface ReferenceDbResult<T> {
+	ok: boolean;
+	data?: T;
+	error?: string;
+}
+
+export interface ReferenceDbAuthStatus {
+	authenticated: boolean;
+	login?: string;
+	method?: string;
+	tokenInPlaintext?: boolean;
+	deviceFlowAvailable: boolean;
+	encryptionAvailable: boolean;
+}
+
+export interface ReferenceDbDeviceCode {
+	deviceCode: string;
+	userCode: string;
+	verificationUri: string;
+	interval: number;
+	expiresIn: number;
+}
+
+export interface ReferenceDbSubmissionFile {
+	path: string;
+	contents: string;
+	baseSha?: string;
+}
+
+export interface ReferenceDbSubmission {
+	files: ReferenceDbSubmissionFile[];
+	title: string;
+	records?: string[];
+	reason?: string;
+	source?: string;
+	notes?: string;
+	editorVersion?: string;
+}
+
+export interface ReferenceDbPullRequest {
+	url: string;
+	number: number;
+	branch: string;
+	usedFork: boolean;
+	fileCount: number;
+}
+
+export interface ReferenceDbTable {
+	key: string;
+	label: string;
+	file_name: string;
+	docs_path: string;
+	changed_count?: number;
+}
+
+//One record in a planned submission, with what it would do upstream.
+export interface ReferenceDbPlanItem {
+	table: string;
+	label: string;
+	file_name: string;
+	record_id: number;
+	record_name: string;
+	meta_line: string;
+	header_line: string;
+	row_line: string;
+	columns: string[];
+	operation: 'add'|'update'|'unchanged';
+	existing_row_line: string|null;
+	errors: string[];
+	warnings: string[];
+	valid: boolean;
+}
+
+export interface ReferenceDbPlan {
+	items: ReferenceDbPlanItem[];
+	files: { file_name: string, contents: string }[];
+	errors: string[];
+	summary: { added: number, updated: number, unchanged: number };
+	per_file_summary: Record<string, { added: number, updated: number }>;
+	valid: boolean;
+	title: string;
+	file_titles: Record<string, string>;
 }
 
 export interface ProjectSettings {

@@ -1,4 +1,4 @@
-import { ElectronAppSettings, ElectronGlobals } from ".";
+import { ElectronAppSettings, ElectronGlobals, ReferenceDbAuthStatus, ReferenceDbConfig, ReferenceDbDeviceCode, ReferenceDbPullRequest, ReferenceDbResult, ReferenceDbSubmission } from ".";
 
 /**
  * Should match main/preload.ts for typescript support in renderer
@@ -33,6 +33,14 @@ export default interface ElectronApi {
 	launchIahris: (scenariosPath:string) => string,
 	setColorTheme: (colorTheme:string) => void,
 	getColorTheme: () => string,
+	referenceDbConfig: () => Promise<ReferenceDbConfig>,
+	referenceDbAuthStatus: () => Promise<ReferenceDbResult<ReferenceDbAuthStatus>>,
+	referenceDbSignInToken: (token:string) => Promise<ReferenceDbResult<{ login:string, tokenInPlaintext:boolean }>>,
+	referenceDbDeviceStart: () => Promise<ReferenceDbResult<ReferenceDbDeviceCode>>,
+	referenceDbDevicePoll: (deviceCode:string, interval:number, expiresIn:number) => Promise<ReferenceDbResult<{ login:string, tokenInPlaintext:boolean }>>,
+	referenceDbSignOut: () => Promise<{ ok:boolean }>,
+	referenceDbGetFile: (filePath:string) => Promise<ReferenceDbResult<{ text:string, sha:string }>>,
+	referenceDbSubmit: (submission:ReferenceDbSubmission) => Promise<ReferenceDbResult<ReferenceDbPullRequest>>,
 	loadFromContextMenu: (callback:any) => void,
 	appUpdateStatus: (callback:any) => void,
 	appUpdateDownloading: (callback:any) => void,

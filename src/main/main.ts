@@ -13,6 +13,7 @@ import kill from 'tree-kill';
 import { autoUpdater } from 'electron-updater';
 import Papa from 'papaparse';
 import { get } from 'http';
+import { GitHubClient } from './github';
 autoUpdater.autoDownload = false;
 
 const store = new Store();
@@ -484,6 +485,52 @@ ipcMain.on('open-file-on-system', (event, file) => {
 
 ipcMain.on('open-url', (event, url) => {
 	shell.openExternal(url);
+})
+
+//Contributing database records to the SWAT+ reference database. These use
+//invoke/handle rather than send/sendSync because they do network work; the
+//access token stays in the main process and is never returned to the renderer.
+const github = new GitHubClient(store, appsettings.referenceDb);
+
+const githubResult = async (work: () => Promise<any>) => {
+	try {
+		return { ok: true, data: await work() };
+	} catch (e: any) {
+		return { ok: false, error: e && e.message ? e.message : String(e) };
+	}
+};
+
+ipcMain.handle('reference-db-config', async () => {
+	return { owner: github.getConfig().owner, repo: github.getConfig().repo, branch: github.getConfig().branch };
+})
+
+ipcMain.handle('reference-db-auth-status', async () => {
+	return await githubResult(() => github.getAuthStatus());
+})
+
+ipcMain.handle('reference-db-sign-in-token', async (event, token: string) => {
+	return await githubResult(() => github.signInWithToken(token));
+})
+
+ipcMain.handle('reference-db-device-start', async () => {
+	return await githubResult(() => github.startDeviceFlow());
+})
+
+ipcMain.handle('reference-db-device-poll', async (event, deviceCode: string, interval: number, expiresIn: number) => {
+	return await githubResult(() => github.pollDeviceFlow(deviceCode, interval, expiresIn));
+})
+
+ipcMain.handle('reference-db-sign-out', async () => {
+	github.signOut();
+	return { ok: true };
+})
+
+ipcMain.handle('reference-db-get-file', async (event, filePath: string) => {
+	return await githubResult(() => github.getFile(filePath));
+})
+
+ipcMain.handle('reference-db-submit', async (event, submission: any) => {
+	return await githubResult(() => github.submitRecords(submission));
 })
 
 ipcMain.on('open-file-dialog', (event, options) => {

@@ -263,9 +263,9 @@ class Cntable_lum(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Cntable_lum, cns)
 
-	def write(self):
-		table = db.Cntable_lum
-		order_by = db.Cntable_lum.id
+	def write(self, database='project'):
+		table = db.Cntable_lum if database == 'project' else db_datasets.Cntable_lum
+		order_by = table.id
 
 		if table.select().count() > 0:
 			with open(self.file_name, 'w') as file:
@@ -330,8 +330,9 @@ class Ovn_table_lum(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Ovn_table_lum, data)
 
-	def write(self):
-		self.write_default_table(db.Ovn_table_lum, True)
+	def write(self, database='project'):
+		table = db.Ovn_table_lum if database == 'project' else db_datasets.Ovn_table_lum
+		self.write_default_table(table, True)
 
 
 class Cons_prac_lum(BaseFileModel):
@@ -369,5 +370,6 @@ class Cons_prac_lum(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Cons_prac_lum, data)
 
-	def write(self):
-		self.write_default_table(db.Cons_prac_lum, True)
+	def write(self, database='project'):
+		table = db.Cons_prac_lum if database == 'project' else db_datasets.Cons_prac_lum
+		self.write_default_table(table, True)

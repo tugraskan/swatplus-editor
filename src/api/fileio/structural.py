@@ -67,8 +67,9 @@ class Septic_str(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Septic_str, data)
 
-	def write(self):
-		self.write_default_table(db.Septic_str, True)
+	def write(self, database='project'):
+		table = db.Septic_str if database == 'project' else db_datasets.Septic_str
+		self.write_default_table(table, True)
 
 
 class Bmpuser_str(BaseFileModel):
@@ -110,8 +111,9 @@ class Bmpuser_str(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Bmpuser_str, data)
 
-	def write(self):
-		self.write_default_table(db.Bmpuser_str, True)
+	def write(self, database='project'):
+		table = db.Bmpuser_str if database == 'project' else db_datasets.Bmpuser_str
+		self.write_default_table(table, True)
 
 
 class Filterstrip_str(BaseFileModel):
@@ -151,8 +153,9 @@ class Filterstrip_str(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Filterstrip_str, data)
 
-	def write(self):
-		self.write_default_table(db.Filterstrip_str, True)
+	def write(self, database='project'):
+		table = db.Filterstrip_str if database == 'project' else db_datasets.Filterstrip_str
+		self.write_default_table(table, True)
 
 
 class Grassedww_str(BaseFileModel):
@@ -195,8 +198,9 @@ class Grassedww_str(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Grassedww_str, data)
 
-	def write(self):
-		self.write_default_table(db.Grassedww_str, True)
+	def write(self, database='project'):
+		table = db.Grassedww_str if database == 'project' else db_datasets.Grassedww_str
+		self.write_default_table(table, True)
 
 
 class Tiledrain_str(BaseFileModel):
@@ -239,5 +243,6 @@ class Tiledrain_str(BaseFileModel):
 		else:
 			db_lib.bulk_insert(datasets_base.db, db_datasets.Tiledrain_str, data)
 
-	def write(self):
-		self.write_default_table(db.Tiledrain_str, True)
+	def write(self, database='project'):
+		table = db.Tiledrain_str if database == 'project' else db_datasets.Tiledrain_str
+		self.write_default_table(table, True)

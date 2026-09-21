@@ -51,7 +51,7 @@ class Plants_plt(base.BaseModel):
 	frac_lai1 = DoubleField()
 	plnt_pop2 = DoubleField()
 	frac_lai2 = DoubleField()
-	frac_sw_gro = DoubleField()
+	rt_depco = DoubleField()
 	aeration = DoubleField()
 	#wnd_dead = DoubleField()
 	#wnd_flat = DoubleField()

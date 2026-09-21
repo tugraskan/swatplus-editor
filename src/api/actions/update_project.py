@@ -24,17 +24,18 @@ import datetime
 
 # Map version prefixes/values to required upgrades
 UPGRADE_PATHS = {
-	'3.2.': ['4_0_0'],
-	'3.1.': ['3_2_0', '4_0_0'],
-	'3.0.': ['3_1_0', '3_2_0', '4_0_0'],
-	'2.3.': ['3_0_0', '3_1_0', '3_2_0', '4_0_0'],
-	('2.1.', '2.2.'): ['2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0'],
-	'2.0.': ['2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0'],
-	('1.3.0', '1.4.0'): ['2_0_0', '2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0'],
-	('1.2.1', '1.2.2', '1.2.3'): ['1_3_0', '2_0_0', '2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0'],
-	'1.2.0': ['1_2_1', '1_3_0', '2_0_0', '2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0'],
-	('1.1.0', '1.1.1', '1.1.2'): ['1_2_0', '1_2_1', '1_3_0', '2_0_0', '2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0'],
-	'1.0.0': ['1_1_0', '1_2_0', '1_2_1', '1_3_0', '2_0_0', '2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0'],
+	'4.0.': ['4_1_0'],
+	'3.2.': ['4_0_0', '4_1_0'],
+	'3.1.': ['3_2_0', '4_0_0', '4_1_0'],
+	'3.0.': ['3_1_0', '3_2_0', '4_0_0', '4_1_0'],
+	'2.3.': ['3_0_0', '3_1_0', '3_2_0', '4_0_0', '4_1_0'],
+	('2.1.', '2.2.'): ['2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0', '4_1_0'],
+	'2.0.': ['2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0', '4_1_0'],
+	('1.3.0', '1.4.0'): ['2_0_0', '2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0', '4_1_0'],
+	('1.2.1', '1.2.2', '1.2.3'): ['1_3_0', '2_0_0', '2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0', '4_1_0'],
+	'1.2.0': ['1_2_1', '1_3_0', '2_0_0', '2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0', '4_1_0'],
+	('1.1.0', '1.1.1', '1.1.2'): ['1_2_0', '1_2_1', '1_3_0', '2_0_0', '2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0', '4_1_0'],
+	'1.0.0': ['1_1_0', '1_2_0', '1_2_1', '1_3_0', '2_0_0', '2_1_0', '2_3_0', '3_0_0', '3_1_0', '3_2_0', '4_0_0', '4_1_0'],
 }
 
 def matches_pattern(version, pattern):
@@ -121,6 +122,24 @@ class UpdateProject(ExecutableApi):
 			reimport_gis = version.startswith('1.1.')
 			if reimport_gis:
 				ReimportGis(project_db, new_version, m.project_name, datasets_db, False, m.is_lte)
+
+	def updates_for_4_1_0(self, project_db):
+		#plants_plt.frac_sw_gro -> rt_depco. SWAT+ repurposed the previously unused
+		#plant_db component frsw_gro as rt_depco ("growth coefficient - rate roots
+		#reach maximum depth"). This is NOT a plain rename: the stored values are a
+		#30-day P-PET monsoon growth trigger and are meaningless as a root-depth
+		#coefficient, so they are reset to the SWAT+ source default rather than
+		#carried across.
+		try:
+			db = SqliteDatabase(project_db, timeout=10)
+			migrator = SqliteMigrator(db)
+			with db.atomic():
+				migrate(migrator.rename_column('plants_plt', 'frac_sw_gro', 'rt_depco', legacy=False))
+			db.close()
+		except Exception:
+			pass
+
+		hru_parm_db.Plants_plt.update({hru_parm_db.Plants_plt.rt_depco: 0.2}).execute()
 
 	def updates_for_4_0_0(self, project_db):
 		

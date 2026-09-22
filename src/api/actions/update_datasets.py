@@ -122,7 +122,27 @@ class UpdateDatasets(ExecutableApi):
 		except Exception:
 			pass
 
-		datasets_hru_parm_db.Plants_plt.update({datasets_hru_parm_db.Plants_plt.rt_depco: 0.2}).execute()
+		#Values supplied with the SWAT+ change (MJW). Differentiated by plant type --
+		#trees and orchards reach maximum root depth more slowly than annuals -- so they
+		#are applied per plant rather than as one flat default.
+		rt_025 = ['euca','frsd','frsd_suhf','frsd_sums','frsd_sust','frsd_tecf','frsd_tems',
+		          'frsd_teof','frsd_test','frse','frse_sudrf','frse_suds','frse_suhf','frse_sums',
+		          'frse_sust','frse_tecf','frse_teds','frse_tems','frse_teof','frse_test','frst',
+		          'frst_suhf','frst_sums','frst_sust','frst_tecf','frst_tems','frst_teof',
+		          'frst_test','rubr','wspr','coco','fodb','fodn','foeb','foen','fomi','migs','wewo']
+		rt_035 = ['cedr','mesq','popl','waln','wbar','wetf','wetl','wetm','will']
+		rt_015 = ['cher','oran','orcd','papa','pear','tuwo']
+		rt_010 = ['mapl','oak']
+
+		_plt = datasets_hru_parm_db.Plants_plt
+		_plt.update({_plt.rt_depco: 0.50}).execute()
+		_plt.update({_plt.rt_depco: 0.25}).where(_plt.name.in_(rt_025)).execute()
+		_plt.update({_plt.rt_depco: 0.35}).where(_plt.name.in_(rt_035)).execute()
+		_plt.update({_plt.rt_depco: 0.15}).where(_plt.name.in_(rt_015)).execute()
+		_plt.update({_plt.rt_depco: 0.10}).where(_plt.name.in_(rt_010)).execute()
+		#grbn (green_beans) is not present in the supplied file; left at the SWAT+ source
+		#default pending a value from the change author.
+		_plt.update({_plt.rt_depco: 0.20}).where(_plt.name == 'grbn').execute()
 
 	def updates_for_4_0_0(self, datasets_db):		
 		if dataset_file_cio.get_or_none(dataset_file_cio.default_file_name == 'carbon.bsn') is None: dataset_file_cio.insert(classification=2, order_in_class=3, database_table='carbon_bsn', default_file_name='carbon.bsn', is_core_file=0).execute()
